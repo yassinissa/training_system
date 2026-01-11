@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Exam Result — {{ session.exam.title }}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; }
+    .summary { padding: 1rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 1rem; }
+    .answer { padding: 0.75rem; border-bottom: 1px solid #eee; }
+    .correct { color: #0a7a2c; }
+    .wrong { color: #b00020; }
+    a.btn { display: inline-block; margin-top: 0.5rem; padding: 0.4rem 0.8rem; background: #2d6cdf; color: #fff; text-decoration: none; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Exam Result</h1>
+  <div class="summary">
+    <div>Exam: {{ session.exam.title }}</div>
+    <div>Status: {{ session.status }}</div>
+    <div>Score: {{ session.score|default:0 }} / {{ session.max_score|default:0 }}</div>
+  </div>
+
+  <h3>Your Answers</h3>
+  {% for ans in answers %}
+    <div class="answer">
+      <div><strong>Q{{ ans.question.order }}:</strong> {{ ans.question.text }}</div>
+      {% if ans.selected_choices.all %}
+        <div>Selected:
+          {% for ch in ans.selected_choices.all %}
+            <span>{{ ch.text }}</span>{% if not forloop.last %}, {% endif %}
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% if ans.text_answer %}
+        <div>Answer: {{ ans.text_answer }}</div>
+      {% endif %}
+      {% if ans.points_awarded is not None %}
+        <div>Points: {{ ans.points_awarded }} / {{ ans.question.max_points }}</div>
+      {% else %}
+        <div class="muted">Awaiting manual grading</div>
+      {% endif %}
+    </div>
+  {% empty %}
+    <p>No answers found.</p>
+  {% endfor %}
+
+  <a class="btn" href="{% url 'web-exams-list' %}">Back to Exams</a>
+</body>
+</html>

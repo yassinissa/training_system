@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Manage Competencies</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ddd; padding: 8px; }
+    th { background: #f4f4f4; text-align: left; }
+    .row { display: flex; gap: 16px; }
+    .col { flex: 1; }
+    .btn { display:inline-block; padding: 6px 10px; background:#2d6cdf; color:#fff; border:none; border-radius:4px; cursor:pointer; }
+    .muted { color:#666; }
+    .error { color:#b00020; }
+    .message { color:#2d6cdf; }
+  </style>
+  </head>
+<body>
+<h1>Manage Competencies</h1>
+<p>
+  <a href="{% url 'web-manager-dashboard' %}">Back to Manager Dashboard</a>
+  |
+  <form action="{% url 'logout' %}" method="post" style="display:inline-block; margin:0;">
+    {% csrf_token %}
+    <button type="submit" class="btn" style="background:#555">Logout</button>
+  </form>
+</p>
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if message %}<p class="message">{{ message }}</p>{% endif %}
+
+<h2>Add Competency</h2>
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  <input type="hidden" name="form_type" value="create_competency" />
+  <div class="row">
+    <div class="col">
+      <label>Reference number:<br><input type="text" name="reference_number" required></label><br><br>
+      <label>Title:<br><input type="text" name="title" required></label><br><br>
+      <label>Duration:<br><input type="text" name="duration" placeholder="e.g., 2 Hours"></label><br><br>
+      <label>Frequency:<br>
+        <select name="frequency">
+          {% for key,label in frequency_choices %}
+            <option value="{{ key }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label><br><br>
+      <label>Priority points:<br><input type="number" name="priority_points" value="0" min="0"></label><br><br>
+      <label>Competency area:<br><input type="text" name="competency_area" placeholder="Training, FOH, HOH, ..."></label><br><br>
+      <label>Brand:<br><input type="text" name="brand" placeholder="e.g., dine_3"></label><br><br>
+      <label><input type="checkbox" name="requires_exam"> Requires exam</label><br><br>
+    </div>
+    <div class="col">
+      <label>Description:<br><textarea name="description" rows="5"></textarea></label><br><br>
+      <label>Content:<br><textarea name="content" rows="6"></textarea></label><br><br>
+      <label>External link:<br><input type="url" name="external_link" placeholder="https://..."></label><br><br>
+      <label>Pdf file:<br><input type="file" name="pdf_file" accept="application/pdf"></label><br><br>
+      <label>Image:<br><input type="file" name="image" accept="image/*"></label><br><br>
+      <button type="submit" class="btn">Add Competency</button>
+    </div>
+  </div>
+</form>
+
+<h2>Your Competencies</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Reference</th>
+      <th>Title</th>
+      <th>Area</th>
+      <th>Frequency</th>
+      <th>Priority</th>
+      <th>Brand</th>
+      <th>Requires Exam</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in competencies %}
+      <tr>
+        <td>{{ c.reference_number }}</td>
+        <td>{{ c.title }}</td>
+        <td>{{ c.competency_area|default:"-" }}</td>
+        <td>{{ c.get_frequency_display }}</td>
+        <td>{{ c.priority_points }}</td>
+        <td>{{ c.brand|default:"-" }}</td>
+        <td>{{ c.requires_exam }}</td>
+        <td>
+          {% if c.id %}
+            <a href="{% url 'web-edit-competency' c.id %}">Edit</a>
+          {% else %}
+            <span class="muted">n/a</span>
+          {% endif %}
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="8" class="muted">No competencies yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</body>
+</html>

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Edit Competency</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .row { display: flex; gap: 16px; }
+    .col { flex: 1; }
+    .btn { display:inline-block; padding: 6px 10px; background:#2d6cdf; color:#fff; border:none; border-radius:4px; cursor:pointer; }
+    .muted { color:#666; }
+    .error { color:#b00020; }
+    .message { color:#2d6cdf; }
+    label { display:block; margin-bottom:8px; }
+  </style>
+</head>
+<body>
+<h1>Edit Competency</h1>
+<p>
+  <a href="{% url 'web-manage-competencies' %}">Back to Manage Competencies</a>
+  |
+  <form action="{% url 'logout' %}" method="post" style="display:inline-block; margin:0;">
+    {% csrf_token %}
+    <button type="submit" class="btn" style="background:#555">Logout</button>
+  </form>
+</p>
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if message %}<p class="message">{{ message }}</p>{% endif %}
+
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  <input type="hidden" name="form_type" value="update_competency" />
+  <div class="row">
+    <div class="col">
+      <label>Reference number:
+        <input type="text" name="reference_number" value="{{ comp.reference_number }}" required>
+      </label>
+      <label>Title:
+        <input type="text" name="title" value="{{ comp.title }}" required>
+      </label>
+      <label>Duration:
+        <input type="text" name="duration" value="{{ comp.duration }}">
+      </label>
+      <label>Frequency:
+        <select name="frequency">
+          {% for key,label in frequency_choices %}
+            <option value="{{ key }}" {% if comp.frequency == key %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Priority points:
+        <input type="number" name="priority_points" value="{{ comp.priority_points }}" min="0">
+      </label>
+      <label>Competency area:
+        <input type="text" name="competency_area" value="{{ comp.competency_area }}">
+      </label>
+      <label>Brand:
+        <input type="text" name="brand" value="{{ comp.brand }}">
+      </label>
+      <label>
+        <input type="checkbox" name="requires_exam" {% if comp.requires_exam %}checked{% endif %}> Requires exam
+      </label>
+    </div>
+    <div class="col">
+      <label>Description:
+        <textarea name="description" rows="5">{{ comp.description }}</textarea>
+      </label>
+      <label>Content:
+        <textarea name="content" rows="6">{{ comp.content }}</textarea>
+      </label>
+      <label>External link:
+        <input type="url" name="external_link" value="{{ comp.external_link }}">
+      </label>
+      <label>Pdf file:
+        {% if comp.pdf_file %}<span class="muted">Current: {{ comp.pdf_file.name }}</span><br>{% endif %}
+        <input type="file" name="pdf_file" accept="application/pdf">
+      </label>
+      <label>Image:
+        {% if comp.image %}<span class="muted">Current: {{ comp.image.name }}</span><br>{% endif %}
+        <input type="file" name="image" accept="image/*">
+      </label>
+      <button type="submit" class="btn">Save Changes</button>
+    </div>
+  </div>
+</form>
+
+<form method="post" style="margin-top:20px;" onsubmit="return confirm('Delete this competency?');">
+  {% csrf_token %}
+  <input type="hidden" name="form_type" value="delete_competency" />
+  <button type="submit" class="btn" style="background:#b00020">Delete</button>
+</form>
+
+</body>
+</html>

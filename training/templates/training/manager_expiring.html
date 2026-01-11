@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Expiring Competencies</title>
+  <style>
+    body { font-family: Arial, sans-serif; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 8px; }
+    th { background: #f4f4f4; }
+    .danger { color: #b00020; font-weight: bold; }
+    .warning { color: #9c6; font-weight: bold; }
+    form.inline { display: inline; }
+  </style>
+</head>
+<body>
+  <h1>Expiring Competencies</h1>
+
+  <form method="get">
+    <label>Branch:
+      <select name="branch">
+        <option value="">All</option>
+        {% for b in branches %}
+          <option value="{{ b.id }}" {% if current_branch_id == b.id %}selected{% endif %}>{{ b.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Position:
+      <select name="position">
+        <option value="">All</option>
+        {% for p in positions %}
+          <option value="{{ p.id }}" {% if current_position_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Window (days):
+      <input type="number" name="window" value="{{ window_days }}" min="1" max="365" />
+    </label>
+    <button type="submit">Filter</button>
+  </form>
+
+  <h2>Expiring Soon (≤ {{ window_days }} days)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Employee</th>
+        <th>Branch</th>
+        <th>Position</th>
+        <th>Competency</th>
+        <th>Expiry Date</th>
+        <th>Days Remaining</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in expiring %}
+        <tr>
+          <td>{{ item.employee.username }}</td>
+          <td>{{ item.employee.employee_branch.name }}</td>
+          <td>{{ item.employee.position.name }}</td>
+          <td>{{ item.requirement.competency.title }}</td>
+          <td>{{ item.expiry_date }}</td>
+          <td class="warning">{{ item.days_remaining }}</td>
+          <td>
+            <form class="inline" method="post">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="retrain" />
+              <input type="hidden" name="employee_id" value="{{ item.employee.id }}" />
+              <input type="hidden" name="competency_id" value="{{ item.requirement.competency.id }}" />
+              <button type="submit">Mark Retrain</button>
+            </form>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7">No expiring competencies in this window.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>Overdue / Not Completed</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Employee</th>
+        <th>Branch</th>
+        <th>Position</th>
+        <th>Competency</th>
+        <th>Status</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in overdue %}
+        <tr>
+          <td>{{ item.employee.username }}</td>
+          <td>{{ item.employee.employee_branch.name }}</td>
+          <td>{{ item.employee.position.name }}</td>
+          <td>{{ item.requirement.competency.title }}</td>
+          <td class="danger">{{ item.status }}</td>
+          <td>
+            <form class="inline" method="post">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="retrain" />
+              <input type="hidden" name="employee_id" value="{{ item.employee.id }}" />
+              <input type="hidden" name="competency_id" value="{{ item.requirement.competency.id }}" />
+              <button type="submit">Mark Retrain</button>
+            </form>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6">Everything is up to date.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Available Exams</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; }
+    .exam { padding: 0.75rem 1rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 0.75rem; }
+    .exam h3 { margin: 0 0 0.25rem 0; }
+    .muted { color: #666; font-size: 0.9rem; }
+    a.btn { display: inline-block; margin-top: 0.5rem; padding: 0.4rem 0.8rem; background: #2d6cdf; color: #fff; text-decoration: none; border-radius: 4px; }
+    a.btn:hover { background: #1f52b0; }
+  </style>
+</head>
+<body>
+  <h1>Available Exams</h1>
+  <div style="margin-bottom:0.75rem">
+    <form action="{% url 'logout' %}" method="post" style="display:inline-block;">
+      {% csrf_token %}
+      <button type="submit" class="btn" style="border:none; cursor:pointer;">Logout</button>
+    </form>
+  </div>
+  <div style="margin-bottom:0.75rem">
+    {% if request.user.is_authenticated and request.user.is_manager %}
+      <a class="btn" href="{% url 'web-publish-requirements' %}">Publish Requirements (Managers)</a>
+    {% endif %}
+    <a class="btn" href="{% url 'web-employee-dashboard' %}">My Training</a>
+    {% if request.user.is_authenticated and request.user.is_admin %}
+      <a class="btn" href="{% url 'web-admin-dashboard' %}">Admin Dashboard</a>
+    {% endif %}
+  </div>
+  {% if debug %}
+  <div class="exam" style="background:#f8f9ff">
+    <div class="muted">
+      Debug — Role: {{ debug.role }} | Position: {{ debug.position_name|default:"-" }} | Branch: {{ debug.branch_name|default:"-" }}
+    </div>
+    <div class="muted">Requirements found: {{ debug.requirements_count }}</div>
+    <div class="muted">Allowed competencies (via requirements): {{ debug.allowed_competency_ids|join:", " }}</div>
+    <div class="muted">Active exam competencies: {{ debug.active_exam_competency_ids|join:", " }}</div>
+    <div class="muted">Exams count: {{ debug.exams_count }}</div>
+  </div>
+  {% endif %}
+  {% if exams %}
+    {% for exam in exams %}
+      <div class="exam">
+        <h3>{{ exam.title }}</h3>
+        {% if exam.competency %}
+          <div class="muted">Competency: {{ exam.competency.reference_number }} — {{ exam.competency.title }}</div>
+        {% endif %}
+        <div class="muted">Time limit: {{ exam.time_limit_seconds }} seconds</div>
+        <a class="btn" href="{% url 'web-take-exam' exam.id %}">Take Exam</a>
+      </div>
+    {% endfor %}
+  {% else %}
+    <p>No exams available.</p>
+  {% endif %}
+</body>
+</html>

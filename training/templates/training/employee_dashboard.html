@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>My Training</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ddd; padding: 8px; }
+    th { background: #f4f4f4; text-align: left; }
+    .badge { padding: 2px 6px; border-radius: 4px; color: #fff; font-size: 12px; }
+    .PASSED { background: #28a745; }
+    .FAILED { background: #dc3545; }
+    .IN_PROGRESS { background: #007bff; color:#fff; }
+    .SUBMITTED { background: #6c757d; }
+    .GRADED { background: #28a745; }
+    .btn { display:inline-block; padding: 6px 10px; background:#2d6cdf; color:#fff; border:none; border-radius:4px; text-decoration:none; }
+  </style>
+</head>
+<body>
+<h1>My Training</h1>
+{% if is_impersonated %}
+  <p class="muted">Viewing as: {{ view_subject.get_full_name|default:view_subject.username }} ({{ view_subject.employee_number }})</p>
+{% endif %}
+<p>
+  <a href="{% url 'web-exams-list' %}">Browse Exams</a>
+  |
+  <form action="{% url 'logout' %}" method="post" style="display:inline-block; margin:0;">
+    {% csrf_token %}
+    <button type="submit" class="btn" style="background:#555">Logout</button>
+  </form>
+</p>
+
+<h2>Required Competencies (for your branch & position)</h2>
+<table>
+  <thead>
+  <tr>
+    <th>Reference</th>
+    <th>Title</th>
+    <th>Frequency</th>
+    <th>Priority</th>
+    <th>Requires Exam</th>
+    <th>Status</th>
+    <th>Action</th>
+  </tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td>{{ row.req.competency.reference_number }}</td>
+      <td>{{ row.req.competency.title }}</td>
+      <td>{{ row.req.get_frequency_display|default:row.req.competency.get_frequency_display }}</td>
+      <td>{{ row.req.priority_points }}</td>
+      <td>{{ row.req.competency.requires_exam }}</td>
+      <td>
+        {% if row.record %}
+          <span class="badge {{ row.record.status }}">{{ row.record.get_status_display }}</span>
+          {% if row.record.score %} ({{ row.record.score }}){% endif %}
+        {% else %}
+          <span class="badge SUBMITTED" style="background:#6c757d">Not started</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if is_impersonated %}
+          <span class="muted">Preview only</span>
+        {% else %}
+          <a class="btn" href="{% url 'web-competency-detail' row.req.competency.id %}">Open</a>
+          {% if row.exams %}
+            <a class="btn" href="{% url 'web-take-exam' row.exams.0.id %}" style="background:#28a745; margin-left:6px;">Take Exam</a>
+          {% else %}
+            <span style="color:#666; margin-left:6px;">No exam available</span>
+          {% endif %}
+        {% endif %}
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="7">No requirements found for your position and branch.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2 style="margin-top:24px;">Your Recent Sessions</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Exam</th>
+      <th>Competency</th>
+      <th>Status</th>
+      <th>Score</th>
+      <th>Started</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for s in sessions %}
+    <tr>
+      <td>{{ s.exam.title }}</td>
+      <td>{{ s.exam.competency.title }}</td>
+      <td><span class="badge {{ s.status }}">{{ s.status }}</span></td>
+      <td>{% if s.score %}{{ s.score }} / {{ s.max_score }}{% else %}-{% endif %}</td>
+      <td>{{ s.started_at|date:"Y-m-d H:i" }}</td>
+      <td>
+        {% if is_impersonated %}
+          <span class="muted">Preview only</span>
+        {% else %}
+          {% if s.status == 'IN_PROGRESS' %}
+            <a class="btn" href="{% url 'web-take-exam' s.exam.id %}">Resume</a>
+          {% elif s.status == 'SUBMITTED' %}
+            <span class="muted">Submitted</span>
+          {% elif s.status == 'GRADED' %}
+            <a class="btn" href="{% url 'web-exam-result' s.id %}">View Result</a>
+          {% endif %}
+        {% endif %}
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="6">No sessions yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+</body>
+</html>

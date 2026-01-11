@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Take Exam — {{ exam.title }}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; }
+    .question { padding: 1rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 1rem; }
+    .question h4 { margin: 0 0 0.5rem 0; }
+    .choices { margin-top: 0.5rem; }
+    .submit { margin-top: 1rem; }
+    button { padding: 0.5rem 1rem; background: #2d6cdf; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #1f52b0; }
+  </style>
+</head>
+<body>
+  <h1>Exam: {{ exam.title }}</h1>
+  {% if exam.competency %}
+    <p>Competency: {{ exam.competency.reference_number }} — {{ exam.competency.title }}</p>
+  {% endif %}
+  <p>Time limit: {{ exam.time_limit_seconds }} seconds</p>
+
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="session_id" value="{{ session.id }}">
+
+    {% for q in questions %}
+      <div class="question">
+        <h4>Q{{ q.order }}: {{ q.text }}</h4>
+        <div class="choices">
+          {% if q.type == "MCQ_SINGLE" or q.type == "TRUE_FALSE" %}
+            {% for ch in q.choices.all %}
+              <div>
+                <label>
+                  <input type="radio" name="q_{{ q.id }}" value="{{ ch.id }}">
+                  {{ ch.text }}
+                </label>
+              </div>
+            {% endfor %}
+          {% elif q.type == "MCQ_MULTI" %}
+            {% for ch in q.choices.all %}
+              <div>
+                <label>
+                  <input type="checkbox" name="q_{{ q.id }}" value="{{ ch.id }}">
+                  {{ ch.text }}
+                </label>
+              </div>
+            {% endfor %}
+          {% elif q.type == "SHORT_TEXT" or q.type == "LONG_TEXT" %}
+            <div>
+              <textarea name="q_{{ q.id }}_text" rows="4" style="width:100%" placeholder="Your answer..."></textarea>
+            </div>
+          {% endif %}
+        </div>
+        <div class="muted">Max points: {{ q.max_points }}</div>
+      </div>
+    {% endfor %}
+
+    <div class="submit">
+      <button type="submit">Submit Exam</button>
+    </div>
+  </form>
+</body>
+</html>

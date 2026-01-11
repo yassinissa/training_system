@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Employee Insights</title>
+  <style>
+    body { font-family: Arial, sans-serif; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 8px; }
+    th { background: #f4f4f4; }
+    .gap { color: #b00020; }
+  </style>
+</head>
+<body>
+  <h1>Employee Insights</h1>
+
+  <form method="get">
+    <label>Employee:
+      <select name="employee">
+        <option value="">Select an employee</option>
+        {% for e in employees %}
+          <option value="{{ e.id }}" {% if selected and selected.id == e.id %}selected{% endif %}>{{ e.username }} ({{ e.employee_branch.name }})</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">Load</button>
+  </form>
+
+  {% if selected %}
+    <h2>Summary</h2>
+    <p>
+      Position: <strong>{{ insights.position }}</strong> | Branch: <strong>{{ insights.branch }}</strong><br>
+      Total Points: <strong>{{ insights.total_points }}</strong> | Level: <strong>{{ insights.level }}</strong>
+    </p>
+
+    <h2>Skill Gaps (Required but not passed)</h2>
+    <table>
+      <thead><tr><th>Reference</th><th>Title</th><th>Priority</th></tr></thead>
+      <tbody>
+        {% for r in gaps %}
+          <tr class="gap">
+            <td>{{ r.competency.reference_number }}</td>
+            <td>{{ r.competency.title }}</td>
+            <td>{{ r.priority_points }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="3">No gaps. Great job!</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h2>Recommendations</h2>
+    <table>
+      <thead><tr><th>Reference</th><th>Title</th><th>Priority</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for r in recommendations %}
+          <tr>
+            <td>{{ r.competency.reference_number }}</td>
+            <td>{{ r.competency.title }}</td>
+            <td>{{ r.priority_points }}</td>
+            <td>
+              <!-- Actions: start exam if exists (via manager dashboard elsewhere), or reassign via requirements page -->
+              <a href="/web/exams/manager/requirements/">Assign Requirements</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4">No recommendations.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</body>
+</html>

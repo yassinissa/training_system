@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Reports & Exports</title>
+  <style>
+    body { font-family: Arial, sans-serif; }
+    .panel { border: 1px solid #ddd; padding: 12px; margin: 12px 0; }
+    a.button { display:inline-block; padding:8px 12px; border:1px solid #333; text-decoration:none; }
+  </style>
+</head>
+<body>
+  <h1>Reports & Exports</h1>
+
+  <div class="panel">
+    <h2>Compliance</h2>
+    <p>Export non-compliant employees and missing competencies. Optional filters below.</p>
+    <form method="get" action="/web/exams/manager/reports/export/compliance.csv">
+      <label>Branch:
+        <select name="branch">
+          <option value="">All</option>
+          {% for b in branches %}
+            <option value="{{ b.id }}">{{ b.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Position:
+        <select name="position">
+          <option value="">All</option>
+          {% for p in positions %}
+            <option value="{{ p.id }}">{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>As of (YYYY-MM-DD):
+        <input type="date" name="as_of" />
+      </label>
+      <button type="submit" class="button">Download Compliance CSV</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>Exam Sessions</h2>
+    <p>Export sessions with status, scores, and submission times. Optional filters below.</p>
+    <form method="get" action="/web/exams/manager/reports/export/sessions.csv">
+      <label>Branch:
+        <select name="branch">
+          <option value="">All</option>
+          {% for b in branches %}
+            <option value="{{ b.id }}">{{ b.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>From:
+        <input type="date" name="from" />
+      </label>
+      <label>To:
+        <input type="date" name="to" />
+      </label>
+      <button type="submit" class="button">Download Sessions CSV</button>
+    </form>
+  </div>
+</body>
+</html>

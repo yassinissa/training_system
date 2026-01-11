@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .panel { border: 1px solid #ddd; border-radius: 6px; padding: 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #ddd; padding: 6px; }
+    th { background: #f4f4f4; }
+    .actions a, .actions button { margin-right: 8px; }
+    .muted { color: #666; }
+    .btn { display:inline-block; padding:6px 10px; background:#2d6cdf; color:#fff; text-decoration:none; border-radius:4px; }
+    .btn.secondary { background:#555; }
+    form.inline { display:inline-block; }
+  </style>
+</head>
+<body>
+  <h1>Admin Dashboard</h1>
+
+  <div class="actions" style="margin-bottom:12px;">
+    <a class="btn" href="{% url 'web-reports-exports' %}">Reports & Exports</a>
+    <a class="btn" href="{% url 'web-manager-employee-lookup' %}">Employee Lookup</a>
+    <form action="{% url 'logout' %}" method="post" style="display:inline-block; margin-left:8px;">
+      {% csrf_token %}
+      <button type="submit" class="btn secondary" style="border:none; cursor:pointer;">Logout</button>
+    </form>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px;">
+    <h2>Customize Dashboard</h2>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="form_type" value="update_layout" />
+      <label><input type="checkbox" name="hide_analytics" {% if layout.hide_analytics %}checked{% endif %}/> Hide Analytics</label>
+      <label><input type="checkbox" name="hide_exceptions" {% if layout.hide_exceptions %}checked{% endif %}/> Hide Exceptions</label>
+      <label><input type="checkbox" name="hide_policy" {% if layout.hide_policy %}checked{% endif %}/> Hide Policy Settings</label>
+      <label><input type="checkbox" name="hide_saved_views" {% if layout.hide_saved_views %}checked{% endif %}/> Hide Saved Views</label>
+      <label><input type="checkbox" name="hide_scheduler" {% if layout.hide_scheduler %}checked{% endif %}/> Hide Scheduler</label>
+      <button type="submit" class="btn">Save Layout</button>
+    </form>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Branches</h2>
+      {% if message %}<div class="muted">{{ message }}</div>{% endif %}
+      {% if error %}<div style="color:#b00020;">{{ error }}</div>{% endif %}
+      <form method="post" style="margin-bottom:10px;">
+        {% csrf_token %}
+        <input type="hidden" name="form_type" value="create_branch" />
+        <label>Name: <input type="text" name="name" required /></label>
+        <label>Location: <input type="text" name="location" /></label>
+        <label>Target %: <input type="number" name="target" min="0" max="100" value="0" /></label>
+        <button type="submit" class="btn">Add Branch</button>
+      </form>
+      <table>
+        <thead><tr><th>ID</th><th>Name</th><th>Location</th><th>Target %</th><th>Actions</th></tr></thead>
+        <tbody>
+          {% for b in branches %}
+            <tr>
+              <td>{{ b.id }}</td>
+              <td>
+                <form method="post" class="inline">
+                  {% csrf_token %}
+                  <input type="hidden" name="form_type" value="update_branch" />
+                  <input type="hidden" name="branch_id" value="{{ b.id }}" />
+                  <input type="text" name="name" value="{{ b.name }}" />
+              </td>
+              <td>
+                  <input type="text" name="location" value="{{ b.location }}" />
+              </td>
+              <td>
+                  <input type="number" name="target" min="0" max="100" value="{{ b.target_compliance_percent }}" />
+              </td>
+              <td>
+                  <button type="submit" class="btn">Save</button>
+                </form>
+                <form method="post" class="inline" onsubmit="return confirm('Delete branch {{ b.name }}?');">
+                  {% csrf_token %}
+                  <input type="hidden" name="form_type" value="delete_branch" />
+                  <input type="hidden" name="branch_id" value="{{ b.id }}" />
+                  <button type="submit" class="btn secondary">Delete</button>
+                </form>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="muted">No branches yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h2>Register Manager</h2>
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="form_type" value="register_manager" />
+        <div>
+          <label>Username: <input type="text" name="username" required /></label>
+        </div>
+        <div>
+          <label>Employee Number: <input type="text" name="employee_number" required /></label>
+        </div>
+        <div>
+          <label>Password: <input type="password" name="password" required /></label>
+        </div>
+        <div>
+          <label>Email: <input type="email" name="email" /></label>
+        </div>
+        <div>
+          <label>Position:
+            <select name="position_id" required>
+              <option value="">Select position</option>
+              {% for p in positions %}
+                <option value="{{ p.id }}">{{ p.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+        <div>
+          <label>Assign Branches:</label>
+          <div style="max-height:160px; overflow:auto; border:1px solid #ddd; padding:6px;">
+            {% for b in branches %}
+              <label style="display:block;">
+                <input type="checkbox" name="branch_ids" value="{{ b.id }}" /> {{ b.name }}
+              </label>
+            {% empty %}
+              <div class="muted">No branches available yet.</div>
+            {% endfor %}
+          </div>
+        </div>
+        <button type="submit" class="btn">Create Manager</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2>Quick Filters</h2>
+      <form method="get" action="{% url 'web-manager-employee-lookup' %}">
+        <label>Employee Number:
+          <input type="text" name="employee_number" value="{{ employee_number }}" />
+        </label>
+        <label>Branch:
+          <select name="branch">
+            <option value="">All</option>
+            {% for b in branches %}
+              <option value="{{ b.id }}" {% if branch_filter_id == b.id %}selected{% endif %}>{{ b.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button type="submit" class="btn">Search</button>
+      </form>
+      <p class="muted">Use Employee Lookup for detailed profile, history, level, and sessions.</p>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:16px;">
+    <h2>Edit User / Manager / Employee</h2>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="form_type" value="update_user" />
+      <div>
+        <label>Employee Number: <input type="text" name="employee_number" required /></label>
+      </div>
+      <div>
+        <label>Role:
+          <select name="role" required>
+            <option value="EMPLOYEE">Employee</option>
+            <option value="MANAGER">Manager</option>
+            <option value="ADMIN">Admin</option>
+          </select>
+        </label>
+      </div>
+      <div>
+        <label>Position:
+          <select name="position_id" required>
+            <option value="">Select position</option>
+            {% for p in positions %}
+              <option value="{{ p.id }}">{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <div>
+        <label>Primary Branch:
+          <select name="employee_branch_id">
+            <option value="">(none)</option>
+            {% for b in branches %}
+              <option value="{{ b.id }}">{{ b.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <div>
+        <label>Manager Branches:</label>
+        <div style="max-height:160px; overflow:auto; border:1px solid #ddd; padding:6px;">
+          {% for b in branches %}
+            <label style="display:block;">
+              <input type="checkbox" name="manager_branch_ids" value="{{ b.id }}" /> {{ b.name }}
+            </label>
+          {% endfor %}
+        </div>
+        <p class="muted">If a primary branch is selected, it will be excluded from the manager branches.</p>
+      </div>
+      <button type="submit" class="btn">Update User</button>
+    </form>
+  </div>
+
+  {% if not layout.hide_analytics %}
+  <div class="panel" style="margin-top:16px;">
+    <h2>Analytics</h2>
+    <div class="grid">
+      <div class="panel">
+        <h3>Summary</h3>
+        <table>
+          <tbody>
+            <tr><th>Active Exams</th><td>{{ summary.exams_active_count }}</td></tr>
+            <tr><th>Competencies</th><td>{{ summary.competencies_count }}</td></tr>
+          </tbody>
+        </table>
+        <h4>Sessions by Status</h4>
+        <table>
+          <thead><tr><th>Status</th><th>Count</th></tr></thead>
+          <tbody>
+            {% for s in summary.sessions_by_status %}
+              <tr><td>{{ s.status }}</td><td>{{ s.count }}</td></tr>
+            {% empty %}
+              <tr><td colspan="2" class="muted">No data</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <h4>Records by Status</h4>
+        <table>
+          <thead><tr><th>Status</th><th>Count</th></tr></thead>
+          <tbody>
+            {% for r in summary.records_by_status %}
+              <tr><td>{{ r.status }}</td><td>{{ r.count }}</td></tr>
+            {% empty %}
+              <tr><td colspan="2" class="muted">No data</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="panel">
+        <h3>Non-Compliance Snapshot</h3>
+        <p>Total checked: {{ non_compliance.total_employees_checked }} | Non-compliant: {{ non_compliance.non_compliant_count }}</p>
+        <table>
+          <thead><tr><th>Employee</th><th>Position</th><th>Branch</th><th>Missing</th><th>Below Min Level</th></tr></thead>
+          <tbody>
+            {% for n in non_compliance.non_compliant|slice:":20" %}
+              <tr>
+                <td>
+                  {% if n.employee_number %}
+                    <a href="{% url 'web-manager-employee-lookup' %}?employee_number={{ n.employee_number }}">{{ n.username }}</a>
+                  {% else %}
+                    {{ n.username }}
+                  {% endif %}
+                </td>
+                <td>{{ n.position }}</td>
+                <td>{{ n.branch }}</td>
+                <td>
+                  {% for m in n.missing_competencies %}
+                    <div>{{ m.title }}</div>
+                  {% endfor %}
+                </td>
+                <td>{{ n.below_min_level }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="5" class="muted">All good.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <p class="muted">For full details, use Reports & Exports.</p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if not layout.hide_exceptions %}
+  <div class="panel" style="margin-top:16px;">
+    <h2>Exception Reports</h2>
+    <div class="grid">
+      <div class="panel">
+        <h3>High-Risk Roles</h3>
+        <table>
+          <thead><tr><th>Position</th><th>Non-Compliant Count</th></tr></thead>
+          <tbody>
+            {% for hr in exceptions.high_risk_roles %}
+              <tr><td>{{ hr.position }}</td><td>{{ hr.count }}</td></tr>
+            {% empty %}
+              <tr><td colspan="2" class="muted">No high-risk roles.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="panel">
+        <h3>Unassigned Employees</h3>
+        <ul>
+          {% for u in exceptions.unassigned_users|slice:":20" %}
+            <li>{{ u.username }}</li>
+          {% empty %}
+            <li class="muted">All employees assigned.</li>
+          {% endfor %}
+        </ul>
+        <h3>Managers Without Branches</h3>
+        <ul>
+          {% for m in exceptions.managers_no_branches|slice:":20" %}
+            <li>{{ m.username }}</li>
+          {% empty %}
+            <li class="muted">All managers have branches.</li>
+          {% endfor %}
+        </ul>
+        <h3>Branches Without Managers</h3>
+        <ul>
+          {% for b in exceptions.branches_without_managers|slice:":20" %}
+            <li>{{ b.name }}</li>
+          {% empty %}
+            <li class="muted">All branches have managers.</li>
+          {% endfor %}
+        </ul>
+        <h3>Duplicate Employee Numbers</h3>
+        <table>
+          <thead><tr><th>Employee Number</th><th>Count</th></tr></thead>
+          <tbody>
+            {% for d in exceptions.duplicate_employee_numbers %}
+              <tr><td>{{ d.employee_number }}</td><td>{{ d.count }}</td></tr>
+            {% empty %}
+              <tr><td colspan="2" class="muted">No duplicates.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if not layout.hide_policy %}
+  <div class="panel" style="margin-top:16px;">
+    <h2>Policy Settings (Positions)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Position</th>
+          <th>Min Level</th>
+          <th>CL1</th>
+          <th>CL2</th>
+          <th>CL3</th>
+          <th>CL4</th>
+          <th>Save</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in positions %}
+        <tr>
+          <td>{{ p.name }}</td>
+          <td>
+            <form method="post" class="inline">
+              {% csrf_token %}
+              <input type="hidden" name="form_type" value="update_position_policy" />
+              <input type="hidden" name="position_id" value="{{ p.id }}" />
+              <select name="min_required_level">
+                <option value="CL0" {% if p.min_required_level == 'CL0' %}selected{% endif %}>CL0</option>
+                <option value="CL1" {% if p.min_required_level == 'CL1' %}selected{% endif %}>CL1</option>
+                <option value="CL2" {% if p.min_required_level == 'CL2' %}selected{% endif %}>CL2</option>
+                <option value="CL3" {% if p.min_required_level == 'CL3' %}selected{% endif %}>CL3</option>
+                <option value="CL4" {% if p.min_required_level == 'CL4' %}selected{% endif %}>CL4</option>
+              </select>
+          </td>
+          <td><input type="number" name="cl1_min_points" value="{{ p.cl1_min_points }}" /></td>
+          <td><input type="number" name="cl2_min_points" value="{{ p.cl2_min_points }}" /></td>
+          <td><input type="number" name="cl3_min_points" value="{{ p.cl3_min_points }}" /></td>
+          <td><input type="number" name="cl4_min_points" value="{{ p.cl4_min_points }}" /></td>
+          <td><button type="submit" class="btn">Save</button></td>
+            </form>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="muted">No positions defined.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if not layout.hide_saved_views %}
+  <div class="panel" style="margin-top:16px;">
+    <h2>Saved Views & Export Presets</h2>
+    <form method="post" style="margin-bottom:10px;">
+      {% csrf_token %}
+      <input type="hidden" name="form_type" value="create_saved_view" />
+      <label>Name: <input type="text" name="name" required /></label>
+      <label>Type:
+        <select name="export_type">
+          <option value="compliance">Compliance</option>
+          <option value="sessions">Sessions</option>
+        </select>
+      </label>
+      <label>Branch:
+        <select name="branch">
+          <option value="">All</option>
+          {% for b in branches %}
+            <option value="{{ b.id }}">{{ b.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Position:
+        <select name="position">
+          <option value="">All</option>
+          {% for p in positions %}
+            <option value="{{ p.id }}">{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <span class="muted">Compliance:</span>
+      <label>As of: <input type="date" name="as_of" /></label>
+      <span class="muted">Sessions:</span>
+      <label>From: <input type="date" name="from" /></label>
+      <label>To: <input type="date" name="to" /></label>
+      <button type="submit" class="btn">Save Preset</button>
+    </form>
+    <table>
+      <thead><tr><th>Name</th><th>Type</th><th>Quick Export</th></tr></thead>
+      <tbody>
+        {% for sv in saved_views %}
+          <tr>
+            <td>{{ sv.name }}</td>
+            <td>{{ sv.export_type }}</td>
+            <td><a class="btn" href="{{ sv.export_url }}" target="_blank">Export</a></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="3" class="muted">No saved presets yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if not layout.hide_scheduler %}
+  <div class="panel" style="margin-top:16px;">
+    <h2>Scheduler</h2>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="form_type" value="update_scheduler" />
+      <label><input type="checkbox" name="enable_auto_reminders" {% if scheduler.enable_auto_reminders %}checked{% endif %} /> Auto-reminders for expiring competencies</label>
+      <br/>
+      <label><input type="checkbox" name="enable_scheduled_reports" {% if scheduler.enable_scheduled_reports %}checked{% endif %} /> Scheduled report emails</label>
+      <br/>
+      <label>Frequency:
+        <select name="report_frequency">
+          <option value="daily" {% if scheduler.report_frequency == 'daily' %}selected{% endif %}>Daily</option>
+          <option value="weekly" {% if scheduler.report_frequency == 'weekly' %}selected{% endif %}>Weekly</option>
+          <option value="monthly" {% if scheduler.report_frequency == 'monthly' %}selected{% endif %}>Monthly</option>
+        </select>
+      </label>
+      <button type="submit" class="btn">Save Scheduler</button>
+    </form>
+    <form method="post" style="margin-top:8px;">
+      {% csrf_token %}
+      <input type="hidden" name="form_type" value="run_scheduler_now" />
+      <button type="submit" class="btn secondary">Run Now</button>
+    </form>
+    <p class="muted">Last run: {% if scheduler.last_run %}{{ scheduler.last_run }}{% else %}never{% endif %}</p>
+    {% if scheduler.last_result %}
+      <pre class="muted" style="white-space:pre-wrap;">{{ scheduler.last_result }}</pre>
+    {% endif %}
+  </div>
+  {% endif %}
+</body>
+</html>

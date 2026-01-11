@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Publish Requirements</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; }
+    .card { border: 1px solid #ddd; border-radius: 6px; padding: 1rem; max-width: 700px; }
+    label { display: block; margin-top: 0.5rem; }
+    select, input[type="number"] { width: 100%; padding: 0.5rem; margin-top: 0.25rem; border: 1px solid #ccc; border-radius: 4px; }
+    .row { display: flex; gap: 1rem; }
+    .row > div { flex: 1; }
+    button { margin-top: 1rem; padding: 0.5rem 1rem; background: #2d6cdf; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #1f52b0; }
+    .muted { color: #666; }
+    .success { color: #0a7a2c; }
+    .error { color: #b00020; }
+    a { color: #2d6cdf; }
+  </style>
+</head>
+<body>
+  <h1>Publish Competency Requirements</h1>
+  <p>
+    <a href="{% url 'web-manager-dashboard' %}">Manager Dashboard</a> ·
+    <a href="{% url 'web-create-exam' %}">Create Exam</a>
+  </p>
+  <p class="muted">Managers can publish competencies to positions for a branch to make exams visible to employees.</p>
+  {% if message %}
+    <p class="success">{{ message }}</p>
+  {% endif %}
+  {% if error %}
+    <p class="error">{{ error }}</p>
+  {% endif %}
+
+  <div class="card">
+    <form method="post">
+      {% csrf_token %}
+      <div class="row">
+        <div>
+          <label for="branch_id">Branch</label>
+          <select id="branch_id" name="branch_id" required>
+            <option value="">Select branch</option>
+            {% for b in branches %}
+              <option value="{{ b.id }}">{{ b.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="competency_id">Competency</label>
+          <select id="competency_id" name="competency_id" required>
+            <option value="">Select competency</option>
+            {% for c in competencies %}
+              <option value="{{ c.id }}">{{ c.reference_number }} — {{ c.title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <label for="position_ids">Positions (required; hold Ctrl to select multiple)</label>
+      <select id="position_ids" name="position_ids" multiple size="6" required>
+        {% for p in positions %}
+          <option value="{{ p.id }}">{{ p.name }}</option>
+        {% endfor %}
+      </select>
+
+      <div class="row">
+        <div>
+          <label for="frequency">Frequency (optional)</label>
+          <select id="frequency" name="frequency">
+            <option value="">(none)</option>
+            <option value="ONE_TIME">One time</option>
+            <option value="YEARLY">Yearly</option>
+            <option value="NEW_HIRE">New hire</option>
+            <option value="PROMOTION">Promotion</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+        <div>
+          <label for="priority_points">Priority points (optional)</label>
+          <input type="number" id="priority_points" name="priority_points" min="0" step="1">
+        </div>
+      </div>
+
+      <label>
+        <input type="checkbox" name="required" checked> Required
+      </label>
+
+      <button type="submit">Publish</button>
+    </form>
+  </div>
+
+  <p class="muted" style="margin-top:0.75rem">Only employees in the selected positions for the chosen branch will see and take the exam linked to this competency.</p>
+
+  <p style="margin-top:1rem"><a href="{% url 'web-exams-list' %}">Back to Exams</a></p>
+</body>
+</html>

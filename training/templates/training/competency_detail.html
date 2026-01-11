@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Competency Details</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .btn { display:inline-block; padding: 6px 10px; background:#2d6cdf; color:#fff; border:none; border-radius:4px; text-decoration:none; }
+    .muted { color:#666; }
+    .box { border:1px solid #ddd; padding:12px; border-radius:6px; margin-bottom:12px; }
+  </style>
+</head>
+<body>
+<h1>{{ comp.reference_number }} — {{ comp.title }}</h1>
+<p>
+  <a href="{% url 'web-employee-dashboard' %}">Back to My Training</a>
+  |
+  <form action="{% url 'logout' %}" method="post" style="display:inline-block; margin:0;">
+    {% csrf_token %}
+    <button type="submit" class="btn" style="background:#555">Logout</button>
+  </form>
+</p>
+
+<div class="box">
+  <h3>Course Content</h3>
+  {% if comp.description %}<p>{{ comp.description }}</p>{% endif %}
+  {% if comp.content %}<div>{{ comp.content|linebreaks }}</div>{% endif %}
+  <ul>
+    {% if comp.pdf_file %}
+      <li>
+        PDF: 
+        <a href="{% url 'web-competency-file' comp.id 'pdf' 'view' %}" target="_blank">View PDF</a>
+        · <a href="{% url 'web-competency-file' comp.id 'pdf' 'download' %}">Download PDF</a>
+      </li>
+      <div style="margin-top:8px;">
+        <iframe src="{% url 'web-competency-file' comp.id 'pdf' 'view' %}" style="width:100%; height:480px; border:1px solid #eee;"></iframe>
+      </div>
+    {% endif %}
+    {% if comp.image %}
+      <li>
+        Image: 
+        <a href="{% url 'web-competency-file' comp.id 'image' 'view' %}" target="_blank">Open Image</a>
+        · <a href="{% url 'web-competency-file' comp.id 'image' 'download' %}">Download Image</a>
+      </li>
+      <div style="margin-top:8px;">
+        <img src="{% url 'web-competency-file' comp.id 'image' 'view' %}" alt="{{ comp.title }}" style="max-width:100%; height:auto; border:1px solid #eee;" />
+      </div>
+    {% endif %}
+    {% if comp.external_link %}
+      <li>External Link: <a href="{{ comp.external_link }}" target="_blank" rel="noopener">Open</a></li>
+    {% endif %}
+  </ul>
+  <form method="post" style="margin-top:8px;">
+    {% csrf_token %}
+    <input type="hidden" name="form_type" value="start_course" />
+    {% if record.status == 'NOT_STARTED' %}
+      <button type="submit" class="btn">Start Course</button>
+      <span class="muted" style="margin-left:8px;">Exam unlocks after starting course.</span>
+    {% else %}
+      <span class="muted">Course started.</span>
+    {% endif %}
+  </form>
+</div>
+
+<div class="box">
+  <h3>Available Exams</h3>
+  {% if exams %}
+    <ul>
+      {% for e in exams %}
+        <li>
+          {{ e.title }} — Time limit {{ e.time_limit_seconds }}s
+          {% if record.status != 'NOT_STARTED' %}
+            <a class="btn" style="margin-left:8px; background:#28a745;" href="{% url 'web-take-exam' e.id %}">Take Exam</a>
+          {% else %}
+            <span class="muted" style="margin-left:8px;">Start course to unlock</span>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted">No exams available for this competency.</p>
+  {% endif %}
+</div>
+
+</body>
+</html>

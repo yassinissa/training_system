@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Manager Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; }
+    .actions { margin-bottom: 1rem; }
+    a.btn { display: inline-block; margin-right: 0.5rem; padding: 0.4rem 0.8rem; background: #2d6cdf; color: #fff; text-decoration: none; border-radius: 4px; }
+    a.btn.secondary { background: #555; }
+    .exam { padding: 0.75rem 1rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 0.75rem; }
+    .muted { color: #666; }
+  </style>
+</head>
+<body>
+  <h1>Manager Dashboard</h1>
+  <div class="actions">
+    <a class="btn" href="{% url 'web-create-exam' %}">Create Exam</a>
+    <a class="btn" href="{% url 'web-publish-requirements' %}">Publish Requirements</a>
+    <a class="btn" href="{% url 'web-manage-requirements' %}">Manage Requirements</a>
+    <a class="btn" href="{% url 'web-manage-competencies' %}">Manage Competencies</a>
+    <a class="btn" href="{% url 'web-manager-employee-lookup' %}">Employee Lookup</a>
+    <a class="btn secondary" href="{% url 'web-exams-list' %}">View Exams (Manager)</a>
+    <a class="btn secondary" href="{% url 'web-manager-sessions' %}">View Sessions</a>
+    <a class="btn" href="{% url 'web-expiring-competencies' %}">Expiring</a>
+    <a class="btn" href="{% url 'web-grading-queue' %}">Grading Queue</a>
+    <a class="btn" href="{% url 'web-employee-insights' %}">Employee Insights</a>
+    <a class="btn" href="{% url 'web-reports-exports' %}">Reports & Exports</a>
+    <form action="{% url 'logout' %}" method="post" style="display:inline-block;">
+      {% csrf_token %}
+      <button type="submit" class="btn secondary" style="border:none; cursor:pointer;">Logout</button>
+    </form>
+  </div>
+
+  {% if message %}
+    <div style="padding:8px; background:#e6ffed; border:1px solid #b7eb8f; border-radius:6px; margin-bottom:12px;">{{ message }}</div>
+  {% endif %}
+  {% if error %}
+    <div style="padding:8px; background:#fff2f0; border:1px solid #ffccc7; border-radius:6px; margin-bottom:12px;">{{ error }}</div>
+  {% endif %}
+
+  <h2>Add Employee to Branch</h2>
+  <form method="post" style="border:1px solid #ddd; padding:12px; border-radius:6px; margin-bottom:16px;">
+    {% csrf_token %}
+    <input type="hidden" name="form_type" value="add_employee" />
+    <div style="display:flex; gap:12px; flex-wrap:wrap;">
+      <label>Employee number<br>
+        <input type="text" name="employee_number" placeholder="e.g., EMP001" required>
+      </label>
+      <label>Name<br>
+        <input type="text" name="name" placeholder="Full name">
+      </label>
+      <label>Position<br>
+        <select name="position_id" required>
+          <option value="">Select a position</option>
+          {% for p in positions %}
+            <option value="{{ p.id }}">{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Branch<br>
+        <select name="branch_id" required>
+          {% for b in branches %}
+            <option value="{{ b.id }}">{{ b.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <div style="margin-top:10px;">
+      <button type="submit" class="btn">Add Employee</button>
+    </div>
+    <p class="muted" style="margin-top:6px;">A temporary password is generated automatically.</p>
+  </form>
+
+  <h2>Your Exams</h2>
+  {% if exams %}
+    {% for exam in exams %}
+      <div class="exam">
+        <div><strong>{{ exam.title }}</strong></div>
+        {% if exam.competency %}
+          <div class="muted">Competency: {{ exam.competency.reference_number }} — {{ exam.competency.title }}</div>
+        {% endif %}
+        <div class="muted">Active: {{ exam.is_active }} | Time limit: {{ exam.time_limit_seconds }}s</div>
+        <div>
+          <a class="btn" href="{% url 'web-manage-questions' exam.id %}">Manage Questions</a>
+          <a class="btn secondary" href="{% url 'web-take-exam' exam.id %}">Preview / Take</a>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <p class="muted">No exams yet. Create one above.</p>
+  {% endif %}
+
+  <h2>Your Competencies</h2>
+  {% if competencies %}
+    <table style="width:100%; border-collapse:collapse; margin-top:10px;">
+      <thead>
+        <tr>
+          <th style="border:1px solid #ddd; padding:6px; background:#f4f4f4;">Reference</th>
+          <th style="border:1px solid #ddd; padding:6px; background:#f4f4f4;">Title</th>
+          <th style="border:1px solid #ddd; padding:6px; background:#f4f4f4;">Area</th>
+          <th style="border:1px solid #ddd; padding:6px; background:#f4f4f4;">Frequency</th>
+          <th style="border:1px solid #ddd; padding:6px; background:#f4f4f4;">Priority</th>
+          <th style="border:1px solid #ddd; padding:6px; background:#f4f4f4;">Brand</th>
+          <th style="border:1px solid #ddd; padding:6px; background:#f4f4f4;">Requires Exam</th>
+          <th style="border:1px solid #ddd; padding:6px; background:#f4f4f4;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in competencies %}
+          <tr>
+            <td style="border:1px solid #ddd; padding:6px;">{{ c.reference_number }}</td>
+            <td style="border:1px solid #ddd; padding:6px;">{{ c.title }}</td>
+            <td style="border:1px solid #ddd; padding:6px;">{{ c.competency_area|default:"-" }}</td>
+            <td style="border:1px solid #ddd; padding:6px;">{{ c.get_frequency_display }}</td>
+            <td style="border:1px solid #ddd; padding:6px;">{{ c.priority_points }}</td>
+            <td style="border:1px solid #ddd; padding:6px;">{{ c.brand|default:"-" }}</td>
+            <td style="border:1px solid #ddd; padding:6px;">{{ c.requires_exam }}</td>
+            <td style="border:1px solid #ddd; padding:6px;">
+              {% if c.id %}
+                <a class="btn secondary" href="{% url 'web-edit-competency' c.id %}">Edit</a>
+              {% else %}
+                <span class="muted">n/a</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:6px;">Showing recent items. Use "Manage Competencies" to add/edit.</p>
+  {% else %}
+    <p class="muted">No competencies yet. Use "Manage Competencies" to add.</p>
+  {% endif %}
+</body>
+</html>

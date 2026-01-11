@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Employee Lookup</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { border: 1px solid #ddd; padding: 6px; }
+    th { background:#f4f4f4; text-align:left; }
+    .badge { padding:2px 6px; border-radius:4px; color:#fff; font-size:12px; }
+    .PASSED { background:#28a745; }
+    .FAILED { background:#dc3545; }
+    .IN_PROGRESS { background:#007bff; }
+    .SUBMITTED { background:#6c757d; }
+    .GRADED { background:#28a745; }
+    .section { border:1px solid #ddd; padding:12px; border-radius:6px; }
+    .muted { color:#666; }
+    .btn { display:inline-block; padding:6px 10px; background:#2d6cdf; color:#fff; border:none; border-radius:4px; text-decoration:none; }
+  </style>
+</head>
+<body>
+<h1>Employee Lookup</h1>
+<p>
+  {% if request.user.is_authenticated and request.user.is_admin %}
+    <a href="{% url 'web-admin-dashboard' %}">Back to Admin Dashboard</a>
+  {% elif request.user.is_authenticated and request.user.is_manager %}
+    <a href="{% url 'web-manager-dashboard' %}">Back to Manager Dashboard</a>
+  {% endif %}
+  |
+  <form action="{% url 'logout' %}" method="post" style="display:inline-block; margin:0;">
+    {% csrf_token %}
+    <button type="submit" class="btn" style="background:#555">Logout</button>
+  </form>
+</p>
+
+<div class="section">
+  <form method="get" style="margin-bottom:10px;">
+    <label>Employee number:
+      <input type="text" name="employee_number" value="{{ employee_number }}" placeholder="e.g., EMP001" />
+    </label>
+    <button type="submit" class="btn">Search</button>
+  </form>
+
+  <form method="get" style="margin-bottom:0;">
+    <label>Branch:
+      <select name="branch">
+        <option value="">(all)</option>
+        {% for b in branches %}
+          <option value="{{ b.id }}" {% if current_branch_id == b.id %}selected{% endif %}>{{ b.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="btn">Filter Staff</button>
+  </form>
+</div>
+
+<div class="grid" style="margin-top:16px;">
+  <div class="section">
+    <h2>Employee Profile</h2>
+    {% if selected_employee %}
+      {% if message %}
+        <div style="padding:8px; background:#e6ffed; border:1px solid #b7eb8f; border-radius:6px;">{{ message }}</div>
+      {% endif %}
+      {% if error %}
+        <div style="padding:8px; background:#fff2f0; border:1px solid #ffccc7; border-radius:6px;">{{ error }}</div>
+      {% endif %}
+      <p><strong>{{ selected_employee.get_full_name|default:selected_employee.username }}</strong> <span class="badge" style="background:#333;">{{ selected_employee.role }}</span></p>
+      {% if selected_employee.role == 'MANAGER' %}
+        <p class="muted">Emp No: {{ selected_employee.employee_number }} · Position: {{ selected_employee.position.name|default:"-" }} · Branches:
+          {% if selected_manager_branches %}
+            {% for b in selected_manager_branches %}
+              {{ b.name }}{% if not forloop.last %}, {% endif %}
+            {% endfor %}
+          {% else %}-{% endif %}
+        </p>
+      {% else %}
+        <p class="muted">Emp No: {{ selected_employee.employee_number }} · Position: {{ selected_employee.position.name|default:"-" }} · Branch: {{ selected_employee.employee_branch.name|default:"-" }}</p>
+      {% endif %}
+      <p>Level: <strong>{{ employee_level }}</strong> · Total points: <strong>{{ total_points }}</strong></p>
+
+      <h3 style="margin-top:14px;">Assign Competency to Employee</h3>
+      <form method="post" style="margin-bottom:12px;">
+        {% csrf_token %}
+        <input type="hidden" name="form_type" value="assign_competency" />
+        <label>Competency
+          <select name="competency_id" required>
+            <option value="">Select competency</option>
+            {% for c in competencies_all %}
+              <option value="{{ c.id }}">{{ c.reference_number }} — {{ c.title }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label style="margin-left:10px;">Frequency
+          <select name="frequency">
+            <option value="">(default)</option>
+            <option value="ONE_TIME">One time</option>
+            <option value="YEARLY">Yearly</option>
+            <option value="NEW_HIRE">New hire</option>
+            <option value="PROMOTION">Promotion</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </label>
+        <label style="margin-left:10px;">
+          <input type="checkbox" name="required" checked> Required
+        </label>
+        <button type="submit" class="btn" style="margin-left:10px;">Assign</button>
+      </form>
+
+      <h3 style="margin-top:14px;">Competency Records</h3>
+      {% if employee_direct_requirements %}
+        <h4>Direct Assignments</h4>
+        <table>
+          <thead>
+            <tr>
+              <th>Reference</th>
+              <th>Title</th>
+              <th>Frequency</th>
+              <th>Branch</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in employee_direct_requirements %}
+              <tr>
+                <td>{{ r.competency.reference_number }}</td>
+                <td>{{ r.competency.title }}</td>
+                <td>{{ r.get_frequency_display|default:r.competency.get_frequency_display }}</td>
+                <td>{{ r.branch.name|default:"-" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+      <table>
+        <thead>
+          <tr>
+            <th>Reference</th>
+            <th>Title</th>
+            <th>Status</th>
+            <th>Score</th>
+            <th>Points</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in employee_records %}
+            <tr>
+              <td>{{ r.competency.reference_number }}</td>
+              <td>{{ r.competency.title }}</td>
+              <td><span class="badge {{ r.status }}">{{ r.get_status_display }}</span></td>
+              <td>{{ r.score }}</td>
+              <td>{{ r.points_earned }}</td>
+              <td>{{ r.date_completed|date:"Y-m-d" }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" class="muted">No records yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <h3 style="margin-top:14px;">Exam Sessions</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Exam</th>
+            <th>Competency</th>
+            <th>Status</th>
+            <th>Score</th>
+            <th>Started</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in employee_sessions %}
+            <tr>
+              <td>{{ s.exam.title }}</td>
+              <td>{{ s.exam.competency.title }}</td>
+              <td><span class="badge {{ s.status }}">{{ s.status }}</span></td>
+              <td>{% if s.score %}{{ s.score }} / {{ s.max_score }}{% else %}-{% endif %}</td>
+              <td>{{ s.started_at|date:"Y-m-d H:i" }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="muted">No sessions yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">Search by employee number to view a profile.</p>
+    {% endif %}
+  </div>
+
+  <div class="section">
+    <h2>Branch Staff</h2>
+    {% if branch_staff %}
+      <table>
+        <thead>
+          <tr>
+            <th>Emp No</th>
+            <th>Name</th>
+            <th>Position</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in branch_staff %}
+            <tr>
+              <td>{{ e.employee_number }}</td>
+              <td>{{ e.get_full_name|default:e.username }}</td>
+              <td>{{ e.position.name|default:"-" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">Choose a branch to list its staff.</p>
+    {% endif %}
+    {% if branch_managers %}
+      <h3 style="margin-top:12px;">Branch Managers</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Emp No</th>
+            <th>Name</th>
+            <th>Assigned Branches</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in branch_managers %}
+            <tr>
+              <td>{{ m.employee_number }}</td>
+              <td>{{ m.get_full_name|default:m.username }}</td>
+              <td>
+                {% for b in m.manager_branches.all %}
+                  <span>{{ b.name }}</span>{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </div>
+</div>
+
+</body>
+</html>

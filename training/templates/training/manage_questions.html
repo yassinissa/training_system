@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Manage Questions — {{ exam.title }}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; }
+    .row { display: flex; gap: 1rem; }
+    .col { flex: 1; }
+    .card { border: 1px solid #ddd; border-radius: 6px; padding: 1rem; }
+    label { display: block; margin-top: 0.5rem; }
+    input[type="text"], input[type="number"], textarea, select { width: 100%; padding: 0.5rem; margin-top: 0.25rem; border: 1px solid #ccc; border-radius: 4px; }
+    button { margin-top: 1rem; padding: 0.5rem 1rem; background: #2d6cdf; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #1f52b0; }
+    .question { padding: 0.75rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 0.75rem; }
+    .muted { color: #666; }
+  </style>
+</head>
+<body>
+  <h1>Manage Questions</h1>
+  {% if error %}
+    <p style="color:#b00020">{{ error }}</p>
+  {% endif %}
+
+  <div class="row">
+    <div class="col">
+      <div class="card">
+        <h3>Add Question</h3>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="form_type" value="add_question">
+          <label for="text">Question Text</label>
+          <textarea id="text" name="text" rows="3" required></textarea>
+
+          <label for="type">Type</label>
+          <select id="type" name="type">
+            <option value="MCQ_SINGLE">Multiple Choice (Single)</option>
+            <option value="MCQ_MULTI">Multiple Choice (Multiple)</option>
+            <option value="TRUE_FALSE">True / False</option>
+            <option value="SHORT_TEXT">Short Text</option>
+            <option value="LONG_TEXT">Long Text</option>
+          </select>
+
+          <label for="order">Order</label>
+          <input type="number" id="order" name="order" value="1" min="1">
+
+          <label for="max_points">Max Points</label>
+          <input type="number" id="max_points" name="max_points" value="1" min="0" step="0.5">
+
+          <button type="submit">Add Question</button>
+        </form>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <h3>Add Choice</h3>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="form_type" value="add_choice">
+          <label for="question_id">Question</label>
+          <select id="question_id" name="question_id" required>
+            <option value="">Select question</option>
+            {% for q in questions %}
+              <option value="{{ q.id }}">Q{{ q.order }} — {{ q.text|truncatechars:60 }}</option>
+            {% endfor %}
+          </select>
+
+          <label for="choice_text">Choice Text</label>
+          <input type="text" id="choice_text" name="choice_text" required>
+
+          <label>
+            <input type="checkbox" name="is_correct"> Correct
+          </label>
+
+          <button type="submit">Add Choice</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <h2>Questions</h2>
+  {% if questions %}
+    {% for q in questions %}
+      <div class="question">
+        <div><strong>Q{{ q.order }}:</strong> {{ q.text }}</div>
+        <div class="muted">Type: {{ q.type }} | Max points: {{ q.max_points }}</div>
+        {% if q.choices.all %}
+          <div class="muted">Choices:</div>
+          <ul>
+            {% for ch in q.choices.all %}
+              <li>{{ ch.text }} {% if ch.is_correct %}(correct){% endif %}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </div>
+    {% endfor %}
+  {% else %}
+    <p class="muted">No questions yet.</p>
+  {% endif %}
+
+  <div style="margin-top:1rem">
+    <a class="btn" href="{% url 'web-publish-requirements' %}">Publish Requirements</a>
+    <a class="btn" href="{% url 'web-manager-dashboard' %}">Back to Manager Dashboard</a>
+    <a class="btn" href="{% url 'web-take-exam' exam.id %}">Preview / Take</a>
+  </div>
+</body>
+</html>

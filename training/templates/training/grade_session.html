@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Grade Session</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .answer { border: 1px solid #ddd; padding: 10px; margin-bottom: 10px; }
+        .meta { color: #666; font-size: 12px; }
+        .actions { margin-top: 8px; }
+        label { display: inline-block; width: 140px; }
+        input[type="number"] { width: 100px; }
+        textarea { width: 100%; min-height: 60px; }
+        .finalize { margin-top: 20px; padding: 10px; border: 1px solid #ccc; background: #fafafa; }
+    </style>
+</head>
+<body>
+<h1>Grade Session #{{ session.id }}</h1>
+<p>
+    Employee: <strong>{{ session.employee.get_full_name|default:session.employee.username }}</strong><br>
+    Branch: <strong>{{ session.employee.employee_branch.name|default:"-" }}</strong><br>
+    Exam: <strong>{{ session.exam.title }}</strong> — Competency: <strong>{{ session.exam.competency.title }}</strong><br>
+    Status: <strong>{{ session.status }}</strong>
+    {% if session.status == 'GRADED' %}
+        — Result:
+        {% if session.result_pass %}
+            <span style="color:#28a745; font-weight:bold;">PASSED</span>
+        {% else %}
+            <span style="color:#dc3545; font-weight:bold;">FAILED</span>
+        {% endif %}
+    {% endif %}
+    <br>
+    Score: <strong>{% if session.score %}{{ session.score }} / {{ session.max_score }}{% else %}-{% endif %}</strong>
+</p>
+<p><a href="/web/exams/manager/sessions/">Back to Sessions</a></p>
+<p>
+    <form action="{% url 'logout' %}" method="post" style="display:inline-block;">
+        {% csrf_token %}
+        <button type="submit" style="background:none; color:#06c; border:none; padding:0; cursor:pointer; text-decoration:underline;">Logout</button>
+    </form>
+</p>
+
+{% if error %}
+<div style="padding:10px; border:1px solid #dc3545; background:#fdecea; color:#a71d2a; margin-bottom:12px;">{{ error }}</div>
+{% endif %}
+
+{% for ans in answers %}
+<div class="answer">
+    <div class="meta">
+        Q{{ forloop.counter }} (Max {{ ans.question.max_points }}): {{ ans.question.text }}
+    </div>
+
+    {% if ans.question.type == 'SHORT_TEXT' or ans.question.type == 'LONG_TEXT' %}
+        <div><em>Employee answer:</em></div>
+        <div style="white-space: pre-wrap; border: 1px dashed #ccc; padding: 8px;">{{ ans.text_answer|default:"(no answer)" }}</div>
+        <form method="post" class="actions">
+            {% csrf_token %}
+            <input type="hidden" name="form_type" value="grade_answer" />
+            <input type="hidden" name="answer_id" value="{{ ans.id }}" />
+            <label>Points awarded</label>
+            <input type="number" name="points_awarded" step="0.01" min="0" max="{{ ans.question.max_points }}" value="{{ ans.points_awarded|default:0 }}" />
+            <br>
+            <label>Manager comment</label>
+            <textarea name="manager_comment">{{ ans.manager_comment }}</textarea>
+            <br>
+            <button type="submit">Save</button>
+        </form>
+    {% elif ans.question.type == 'MCQ_MULTI' %}
+        <div><em>Selected choices:</em>
+            {% for c in ans.selected_choices.all %}
+                <div>- {{ c.text }} {% if c.is_correct %}(correct){% endif %}</div>
+            {% empty %}
+                <div>(none)</div>
+            {% endfor %}
+        </div>
+        <form method="post" class="actions">
+            {% csrf_token %}
+            <input type="hidden" name="form_type" value="grade_answer" />
+            <input type="hidden" name="answer_id" value="{{ ans.id }}" />
+            <label>Points awarded</label>
+            <input type="number" name="points_awarded" step="0.01" min="0" max="{{ ans.question.max_points }}" value="{{ ans.points_awarded|default:0 }}" />
+            <br>
+            <label>Manager comment</label>
+            <textarea name="manager_comment">{{ ans.manager_comment }}</textarea>
+            <br>
+            <button type="submit">Save</button>
+        </form>
+    {% else %}
+        <div><em>Selected choices:</em>
+            {% for c in ans.selected_choices.all %}
+                <div>- {{ c.text }} {% if c.is_correct %}(correct){% endif %}</div>
+            {% empty %}
+                <div>(none)</div>
+            {% endfor %}
+        </div>
+        <div>Auto score: <strong>{{ ans.auto_score|default:0 }}</strong> / {{ ans.question.max_points }}</div>
+    {% endif %}
+</div>
+{% empty %}
+    <p>No answers.</p>
+{% endfor %}
+
+<div class="finalize">
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="form_type" value="finalize_grade" />
+        <button type="submit">Recalculate and Save Final Grade (90% pass)</button>
+    </form>
+</div>
+</body>
+</html>

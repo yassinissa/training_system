@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Grading Queue</title>
+  <style>
+    body { font-family: Arial, sans-serif; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 8px; }
+    th { background: #f4f4f4; }
+    .manual { color: #b00020; font-weight: bold; }
+    .auto { color: #2e7d32; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Grading Queue</h1>
+  <p>
+    Manual needed: <strong>{{ manual_count }}</strong> | Auto-only: <strong>{{ auto_only }}</strong>
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Session</th>
+        <th>Employee</th>
+        <th>Branch</th>
+        <th>Exam</th>
+        <th>Submitted</th>
+        <th>SLA (hours)</th>
+        <th>Type</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in sessions %}
+        <tr>
+          <td>#{{ item.session.id }}</td>
+          <td>{{ item.session.employee.username }}</td>
+          <td>{{ item.session.employee.employee_branch.name }}</td>
+          <td>{{ item.session.exam.title }}</td>
+          <td>{{ item.session.submitted_at }}</td>
+          <td>{{ item.sla_hours }}</td>
+          <td class="{% if item.manual_needed %}manual{% else %}auto{% endif %}">
+            {% if item.manual_needed %}Manual{% else %}Auto-only{% endif %}
+          </td>
+          <td>
+            <a href="/web/exams/manager/sessions/{{ item.session.id }}/">Grade</a>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="8">No pending sessions.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

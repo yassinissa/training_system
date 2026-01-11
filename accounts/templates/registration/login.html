@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Login</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; }
+    .container { max-width: 400px; margin: 0 auto; }
+    .card { border: 1px solid #ddd; border-radius: 6px; padding: 1rem; }
+    label { display: block; margin-bottom: 0.25rem; }
+    input[type="text"], input[type="password"] { width: 100%; padding: 0.5rem; margin-bottom: 0.75rem; border: 1px solid #ccc; border-radius: 4px; }
+    button { padding: 0.5rem 1rem; background: #2d6cdf; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #1f52b0; }
+    .errorlist { color: #b00020; list-style: none; padding: 0; }
+    .muted { color: #666; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Login</h1>
+    <div class="card">
+      {% if form.errors %}
+        <ul class="errorlist">
+          {% for field, errors in form.errors.items %}
+            {% for error in errors %}
+              <li>{{ error }}</li>
+            {% endfor %}
+          {% endfor %}
+        </ul>
+      {% endif %}
+
+      <form method="post" action="{% url 'login' %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}">
+
+        <label for="id_username">Username or Employee Number</label>
+        <input type="text" name="username" id="id_username" required>
+
+        <label for="id_password">Password</label>
+        <input type="password" name="password" id="id_password" required>
+
+        <button type="submit">Log in</button>
+      </form>
+      <p class="muted">Use your employee or manager account credentials.</p>
+    </div>
+  </div>
+</body>
+</html>

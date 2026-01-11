@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Create Exam</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; }
+    .card { border: 1px solid #ddd; border-radius: 6px; padding: 1rem; max-width: 700px; }
+    label { display: block; margin-top: 0.5rem; }
+    input[type="text"], input[type="number"], textarea, select { width: 100%; padding: 0.5rem; margin-top: 0.25rem; border: 1px solid #ccc; border-radius: 4px; }
+    button { margin-top: 1rem; padding: 0.5rem 1rem; background: #2d6cdf; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #1f52b0; }
+    .muted { color: #666; }
+    .error { color: #b00020; }
+  </style>
+</head>
+<body>
+  <h1>Create Exam</h1>
+  {% if error %}
+    <p class="error">{{ error }}</p>
+  {% endif %}
+  <div class="card">
+    <form method="post">
+      {% csrf_token %}
+      <label for="title">Title</label>
+      <input type="text" id="title" name="title" required>
+
+      <label for="description">Description</label>
+      <textarea id="description" name="description" rows="3"></textarea>
+
+      <label for="competency_id">Competency</label>
+      <select id="competency_id" name="competency_id">
+        <option value="">(none)</option>
+        {% for c in competencies %}
+          <option value="{{ c.id }}">{{ c.reference_number }} — {{ c.title }}</option>
+        {% endfor %}
+      </select>
+
+      <label for="position">Position Label (optional)</label>
+      <input type="text" id="position" name="position" placeholder="e.g., Waiter">
+      <p class="muted">Note: This label is informational. Employee access is controlled when you publish the competency to specific positions and a branch.</p>
+
+      <label for="time_limit_seconds">Time Limit (seconds)</label>
+      <input type="number" id="time_limit_seconds" name="time_limit_seconds" value="600" min="60" step="30">
+
+      <label>
+        <input type="checkbox" name="is_active" checked> Active
+      </label>
+
+      <button type="submit">Create and Manage Questions</button>
+    </form>
+  </div>
+
+  <p style="margin-top:1rem"><a href="{% url 'web-manager-dashboard' %}">Back to Manager Dashboard</a></p>
+</body>
+</html>
