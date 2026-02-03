@@ -55,62 +55,119 @@ class UserAdmin(admin.ModelAdmin):
     class Media:
         js = ["admin/js/user_role_fields.js"]
     form = UserAdminForm
-    list_display = ["username", "role", "employee_number", "employee_branch", "position"]
-    list_filter = ["role", "employee_branch"]
-    search_fields = ["username", "employee_number"]
-    filter_horizontal = ["manager_branches"]
+    list_display = [
+        "username",
+        "role",
+        "employee_number",
+        "employee_branch",
+        "position",
+        "total_points",
+        "current_level",
+    ]
+    ordering = ["username"]
 
-    def save_model(self, request, obj, form, change):
-        # Ensure passwords entered in the admin UI are hashed
-        if form is not None and "password" in form.changed_data:
-            raw = form.cleaned_data.get("password")
-            if raw:
-                try:
-                    # If this succeeds, it's already a valid hashed password
-                    identify_hasher(raw)
-                except Exception:
-                    # Otherwise, treat it as plaintext and hash it
-                    obj.set_password(raw)
-        super().save_model(request, obj, form, change)
-
-    def get_fieldsets(self, request, obj=None):
-        # ADD user: obj is None → show all relevant fields
-        if obj is None:
-            return (
-                (None, {
-                    "fields": [
-                        "username",
-                        "password",
-                        "role",
-                        "employee_number",
-                        "position",
-                        "employee_branch",
-                        "manager_branches",
-                    ]
-                }),
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        # Annotate with total points for sorting
+        from django.db.models import Sum, Case, When, IntegerField
+        from training.models import EmployeeCompetencyRecord
+        return qs.annotate(
+            _total_points=Sum(
+                Case(
+                    When(
+                        competency_records__status="PASSED",
+                        then="competency_records__points_earned"
+                    ),
+                    default=0,
+                    output_field=IntegerField(),
+                )
             )
+        )
 
-        # EDIT user: adjust based on role
-        if obj.role == User.Roles.ADMIN:
-            return (
-                (None, {"fields": ["username", "password", "role"]}),
-                ("Permissions", {"fields": ["is_active", "is_staff", "is_superuser", "groups", "user_permissions"]}),
-            )
+    def total_points(self, obj):
+        # Use annotated value if available for sorting
+        return getattr(obj, "_total_points", None) or obj.get_total_points()
+    total_points.admin_order_field = "_total_points"
+    total_points.short_description = "Total Points"
 
-        if obj.role == User.Roles.MANAGER:
-            return (
-                (None, {"fields": ["username", "password", "role", "employee_number", "position"]}),
-                ("Manager Assignment", {"fields": ["manager_branches"]}),
-                ("Permissions", {"fields": ["is_active"]}),
-            )
+    def current_level(self, obj):
+        return obj.get_competency_level()
+    current_level.short_description = "Current Level"
 
-        if obj.role == User.Roles.EMPLOYEE:
-            return (
-                (None, {"fields": ["username", "password", "role", "employee_number", "position", "employee_branch"]}),
-                ("Permissions", {"fields": ["is_active"]}),
-            )
+class CurrentLevelListFilter(admin.SimpleListFilter):
+    title = 'Current Level'
+    parameter_name = 'current_level'
 
-        return super().get_fieldsets(request, obj)
+    def lookups(self, request, model_admin):
+        from training.models import CompetencyLevel
+        return [
+            (level, label)
+            for level, label in CompetencyLevel.choices
+        ]
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value:
+            # Filter users by calculated level
+            ids = [u.id for u in queryset if u.get_competency_level() == value]
+            return queryset.filter(id__in=ids)
+        return queryset
+
+
+
+UserAdmin.list_filter = ["role", "employee_branch", CurrentLevelListFilter]
+
+def save_model(self, request, obj, form, change):
+    # Ensure passwords entered in the admin UI are hashed
+    if form is not None and "password" in form.changed_data:
+        raw = form.cleaned_data.get("password")
+        if raw:
+            try:
+                # If this succeeds, it's already a valid hashed password
+                identify_hasher(raw)
+            except Exception:
+                # Otherwise, treat it as plaintext and hash it
+                obj.set_password(raw)
+    super(UserAdmin, self).save_model(request, obj, form, change)
+
+def get_fieldsets(self, request, obj=None):
+    # ADD user: obj is None → show all relevant fields
+    if obj is None:
+        return (
+            (None, {
+                "fields": [
+                    "username",
+                    "password",
+                    "role",
+                    "employee_number",
+                    "position",
+                    "employee_branch",
+                    "manager_branches",
+                ]
+            }),
+        )
+
+    # EDIT user: adjust based on role
+    if obj.role == User.Roles.ADMIN:
+        return (
+            (None, {"fields": ["username", "password", "role"]}),
+            ("Permissions", {"fields": ["is_active", "is_staff", "is_superuser", "groups", "user_permissions"]}),
+        )
+
+    if obj.role == User.Roles.MANAGER:
+        return (
+            (None, {"fields": ["username", "password", "role", "employee_number", "position"]}),
+            ("Manager Assignment", {"fields": ["manager_branches"]}),
+            ("Permissions", {"fields": ["is_active"]}),
+        )
+
+    if obj.role == User.Roles.EMPLOYEE:
+        return (
+            (None, {"fields": ["username", "password", "role", "employee_number", "position", "employee_branch"]}),
+            ("Permissions", {"fields": ["is_active"]}),
+        )
+
+    return super(UserAdmin, self).get_fieldsets(request, obj)
 
 
 

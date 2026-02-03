@@ -15,10 +15,15 @@ from training.models import (
     Question,
     QuestionChoice,
     ExamSession,
+    ExamAnswer,
     PositionCompetencyRequirement,
 )
 from accounts.models import Position
 from branches.models import Branch
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from training.serializers import CompetencySerializer, ExamTemplateSerializer
 
 
 @login_required
@@ -59,6 +64,12 @@ def exams_list_page(request):
 
     exams = qs.select_related("competency").order_by("created_at")
 
+    taken_exam_ids = []
+    if getattr(user, "is_employee", None) and user.is_employee():
+        taken_exam_ids = list(
+            ExamSession.objects.filter(employee=user).values_list("exam_id", flat=True).distinct()
+        )
+
     # Debug context to help verify gating
     debug = {
         "role": getattr(user, "role", None),
@@ -86,7 +97,11 @@ def exams_list_page(request):
         debug["requirements_count"] = allowed_req.count()
         debug["allowed_competency_ids"] = list(allowed_req.values_list("competency_id", flat=True))
 
-    return render(request, "training/exams_list.html", {"exams": exams, "debug": debug})
+    return render(
+        request,
+        "training/exams_list.html",
+        {"exams": exams, "debug": debug, "taken_exam_ids": taken_exam_ids},
+    )
 
 
 @login_required
@@ -1606,15 +1621,17 @@ def take_exam_page(request, exam_id: int):
         if not is_allowed:
             return HttpResponseForbidden("You are not allowed to take this exam.")
 
-        # Require starting the course before taking the exam (if required)
-        from training.models import EmployeeCompetencyRecord
-        if exam.competency and exam.competency.requires_exam:
-            rec, _ = EmployeeCompetencyRecord.objects.get_or_create(
-                employee=user,
-                competency=exam.competency,
-            )
-            if rec.status == EmployeeCompetencyRecord.Status.NOT_STARTED:
-                return HttpResponseForbidden("Please open the competency and start the course before taking the exam.")
+        # Allow exam access without forcing course start; managers decide assignment policy.
+
+        # Block repeat attempts once a session has been submitted/graded/expired.
+        finalized = (
+            ExamSession.objects.filter(exam=exam, employee=user)
+            .exclude(status=ExamSession.Status.IN_PROGRESS)
+            .order_by("-started_at")
+            .first()
+        )
+        if finalized:
+            return redirect("web-exam-result", session_id=finalized.id)
 
     # Get or create an in-progress session on GET; reuse on POST
     session = ExamSession.objects.filter(
@@ -1777,12 +1794,19 @@ def employee_dashboard_page(request):
         .order_by("-started_at")[:20]
     )
 
+    latest_session_by_comp = {}
+    for s in sessions:
+        comp_id = getattr(getattr(s.exam, "competency", None), "id", None)
+        if comp_id and comp_id not in latest_session_by_comp:
+            latest_session_by_comp[comp_id] = s
+
     rows = []
     for r in reqs:
         rows.append({
             "req": r,
             "record": records.get(r.competency_id),
             "exams": exams_by_comp.get(r.competency_id, []),
+            "latest_session": latest_session_by_comp.get(r.competency_id),
         })
 
     return render(
@@ -1810,6 +1834,13 @@ def competency_detail_page(request, comp_id: int):
     exams = list(ExamTemplate.objects.filter(is_active=True, competency_id=comp.id).order_by("-created_at"))
     record, _ = EmployeeCompetencyRecord.objects.get_or_create(employee=user, competency=comp)
 
+    latest_session = (
+        ExamSession.objects.select_related("exam")
+        .filter(employee=user, exam__competency=comp)
+        .order_by("-started_at")
+        .first()
+    )
+
     if request.method == "POST" and request.POST.get("form_type") == "start_course":
         record.status = EmployeeCompetencyRecord.Status.IN_PROGRESS
         record.save(update_fields=["status"])
@@ -1818,7 +1849,7 @@ def competency_detail_page(request, comp_id: int):
     return render(
         request,
         "training/competency_detail.html",
-        {"comp": comp, "req": req, "exams": exams, "record": record},
+        {"comp": comp, "req": req, "exams": exams, "record": record, "latest_session": latest_session},
     )
 
 
@@ -1854,3 +1885,27 @@ def competency_file_action(request, comp_id: int, filetype: str, action: str):
     as_attachment = (action == "download")
     filename = field.name.split("/")[-1]
     return FileResponse(fh, as_attachment=as_attachment, filename=filename)
+
+
+class EmployeeDashboardAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        # Get competencies assigned to this employee's position and branch
+        position_id = getattr(user, 'position_id', None)
+        branch_id = getattr(user, 'employee_branch_id', None)
+        reqs = PositionCompetencyRequirement.objects.filter(
+            position_id=position_id,
+            branch_id=branch_id
+        ).select_related('competency')
+        competencies = [r.competency for r in reqs]
+        # For each competency, get the related exam (if any)
+        data = []
+        for comp in competencies:
+            exam = ExamTemplate.objects.filter(competency=comp, is_active=True).first()
+            data.append({
+                'competency': CompetencySerializer(comp).data,
+                'exam': ExamTemplateSerializer(exam).data if exam else None
+            })
+        return Response(data)

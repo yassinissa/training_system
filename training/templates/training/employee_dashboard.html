@@ -4,120 +4,214 @@
   <meta charset="UTF-8">
   <title>My Training</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border: 1px solid #ddd; padding: 8px; }
-    th { background: #f4f4f4; text-align: left; }
-    .badge { padding: 2px 6px; border-radius: 4px; color: #fff; font-size: 12px; }
-    .PASSED { background: #28a745; }
-    .FAILED { background: #dc3545; }
-    .IN_PROGRESS { background: #007bff; color:#fff; }
-    .SUBMITTED { background: #6c757d; }
-    .GRADED { background: #28a745; }
-    .btn { display:inline-block; padding: 6px 10px; background:#2d6cdf; color:#fff; border:none; border-radius:4px; text-decoration:none; }
+    :root {
+      color-scheme: light;
+      --bg: #f6f8fb;
+      --surface: #ffffff;
+      --border: #e5e7eb;
+      --text: #0f172a;
+      --muted: #4b5563;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --pill: #e0e7ff;
+      --success: #16a34a;
+      --danger: #dc2626;
+      --neutral: #6b7280;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 28px 20px 40px;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .page { max-width: 1180px; margin: 0 auto; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    h1 { margin: 0; font-size: 30px; letter-spacing: -0.02em; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .nav { display: flex; gap: 10px; align-items: center; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 9px 14px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      box-shadow: 0 6px 18px rgba(37, 99, 235, 0.25);
+      cursor: pointer;
+      transition: background 0.15s ease, transform 0.15s ease;
+    }
+    .btn:hover { background: var(--primary-dark); transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn.secondary { background: #111827; box-shadow: none; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(15, 23, 42, 0.06);
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+    .card h2 { margin: 0 0 10px; font-size: 20px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 8px; text-align: left; }
+    th { color: var(--muted); font-size: 13px; border-bottom: 1px solid var(--border); }
+    tr + tr td { border-top: 1px solid var(--border); }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      border: 1px solid var(--border);
+      background: #f9fafb;
+      color: var(--muted);
+    }
+    .badge.PASSED, .badge.GRADED { background: #dcfce7; color: #166534; border-color: #86efac; }
+    .badge.FAILED { background: #fee2e2; color: #b91c1c; border-color: #fecdd3; }
+    .badge.IN_PROGRESS { background: #e0e7ff; color: #1d4ed8; border-color: #c7d2fe; }
+    .badge.SUBMITTED { background: #e5e7eb; color: #374151; border-color: #d1d5db; }
+    .table-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--pill);
+      color: var(--primary-dark);
+      font-weight: 600;
+      font-size: 13px;
+      border: 1px solid #c7d2fe;
+    }
   </style>
 </head>
 <body>
-<h1>My Training</h1>
-{% if is_impersonated %}
-  <p class="muted">Viewing as: {{ view_subject.get_full_name|default:view_subject.username }} ({{ view_subject.employee_number }})</p>
-{% endif %}
-<p>
-  <a href="{% url 'web-exams-list' %}">Browse Exams</a>
-  |
-  <form action="{% url 'logout' %}" method="post" style="display:inline-block; margin:0;">
-    {% csrf_token %}
-    <button type="submit" class="btn" style="background:#555">Logout</button>
-  </form>
-</p>
+<div class="page">
+  <div class="header">
+    <div>
+      <p class="pill">Employee</p>
+      <h1>My Training</h1>
+      {% if is_impersonated %}
+        <div class="muted">Viewing as: {{ view_subject.get_full_name|default:view_subject.username }} ({{ view_subject.employee_number }})</div>
+      {% endif %}
+    </div>
+    <div class="nav">
+      <a class="btn" href="{% url 'web-exams-list' %}">Browse Exams</a>
+      <form action="{% url 'logout' %}" method="post" style="margin:0;">
+        {% csrf_token %}
+        <button type="submit" class="btn secondary">Logout</button>
+      </form>
+    </div>
+  </div>
 
-<h2>Required Competencies (for your branch & position)</h2>
-<table>
-  <thead>
-  <tr>
-    <th>Reference</th>
-    <th>Title</th>
-    <th>Frequency</th>
-    <th>Priority</th>
-    <th>Requires Exam</th>
-    <th>Status</th>
-    <th>Action</th>
-  </tr>
-  </thead>
-  <tbody>
-  {% for row in rows %}
-    <tr>
-      <td>{{ row.req.competency.reference_number }}</td>
-      <td>{{ row.req.competency.title }}</td>
-      <td>{{ row.req.get_frequency_display|default:row.req.competency.get_frequency_display }}</td>
-      <td>{{ row.req.priority_points }}</td>
-      <td>{{ row.req.competency.requires_exam }}</td>
-      <td>
-        {% if row.record %}
-          <span class="badge {{ row.record.status }}">{{ row.record.get_status_display }}</span>
-          {% if row.record.score %} ({{ row.record.score }}){% endif %}
-        {% else %}
-          <span class="badge SUBMITTED" style="background:#6c757d">Not started</span>
-        {% endif %}
-      </td>
-      <td>
-        {% if is_impersonated %}
-          <span class="muted">Preview only</span>
-        {% else %}
-          <a class="btn" href="{% url 'web-competency-detail' row.req.competency.id %}">Open</a>
-          {% if row.exams %}
-            <a class="btn" href="{% url 'web-take-exam' row.exams.0.id %}" style="background:#28a745; margin-left:6px;">Take Exam</a>
-          {% else %}
-            <span style="color:#666; margin-left:6px;">No exam available</span>
-          {% endif %}
-        {% endif %}
-      </td>
-    </tr>
-  {% empty %}
-    <tr><td colspan="7">No requirements found for your position and branch.</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
+  <div class="card">
+    <h2>Required Competencies</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Reference</th>
+          <th>Title</th>
+          <th>Frequency</th>
+          <th>Priority</th>
+          <th>Requires Exam</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td>{{ row.req.competency.reference_number }}</td>
+          <td>{{ row.req.competency.title }}</td>
+          <td>{{ row.req.get_frequency_display|default:row.req.competency.get_frequency_display }}</td>
+          <td>{{ row.req.priority_points }}</td>
+          <td>{{ row.req.competency.requires_exam }}</td>
+          <td>
+            {% if row.record %}
+              <span class="badge {{ row.record.status }}">{{ row.record.get_status_display }}</span>
+              {% if row.record.score %} ({{ row.record.score }}){% endif %}
+            {% else %}
+              <span class="badge SUBMITTED">Not started</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if is_impersonated %}
+              <span class="muted">Preview only</span>
+            {% else %}
+              <div class="table-actions">
+                <a class="btn" href="{% url 'web-competency-detail' row.req.competency.id %}">Open</a>
+                {% if row.latest_session %}
+                  {% if row.latest_session.status == 'IN_PROGRESS' %}
+                    <a class="btn" href="{% url 'web-take-exam' row.latest_session.exam.id %}">Resume</a>
+                  {% else %}
+                    <span class="muted">Submitted ({{ row.latest_session.status }})</span>
+                    <a class="btn" href="{% url 'web-exam-result' row.latest_session.id %}">View</a>
+                  {% endif %}
+                {% elif row.exams %}
+                  <a class="btn" href="{% url 'web-take-exam' row.exams.0.id %}">Take Exam</a>
+                {% else %}
+                  <span class="muted">No exam available</span>
+                {% endif %}
+              </div>
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7">No requirements found for your position and branch.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
-<h2 style="margin-top:24px;">Your Recent Sessions</h2>
-<table>
-  <thead>
-    <tr>
-      <th>Exam</th>
-      <th>Competency</th>
-      <th>Status</th>
-      <th>Score</th>
-      <th>Started</th>
-      <th>Action</th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for s in sessions %}
-    <tr>
-      <td>{{ s.exam.title }}</td>
-      <td>{{ s.exam.competency.title }}</td>
-      <td><span class="badge {{ s.status }}">{{ s.status }}</span></td>
-      <td>{% if s.score %}{{ s.score }} / {{ s.max_score }}{% else %}-{% endif %}</td>
-      <td>{{ s.started_at|date:"Y-m-d H:i" }}</td>
-      <td>
-        {% if is_impersonated %}
-          <span class="muted">Preview only</span>
-        {% else %}
-          {% if s.status == 'IN_PROGRESS' %}
-            <a class="btn" href="{% url 'web-take-exam' s.exam.id %}">Resume</a>
-          {% elif s.status == 'SUBMITTED' %}
-            <span class="muted">Submitted</span>
-          {% elif s.status == 'GRADED' %}
-            <a class="btn" href="{% url 'web-exam-result' s.id %}">View Result</a>
-          {% endif %}
-        {% endif %}
-      </td>
-    </tr>
-  {% empty %}
-    <tr><td colspan="6">No sessions yet.</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
-
+  <div class="card">
+    <h2>Your Recent Sessions</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Exam</th>
+          <th>Competency</th>
+          <th>Status</th>
+          <th>Score</th>
+          <th>Started</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for s in sessions %}
+        <tr>
+          <td>{{ s.exam.title }}</td>
+          <td>{{ s.exam.competency.title }}</td>
+          <td><span class="badge {{ s.status }}">{{ s.status }}</span></td>
+          <td>{% if s.score %}{{ s.score }} / {{ s.max_score }}{% else %}-{% endif %}</td>
+          <td>{{ s.started_at|date:"Y-m-d H:i" }}</td>
+          <td>
+            {% if is_impersonated %}
+              <span class="muted">Preview only</span>
+            {% else %}
+              <div class="table-actions">
+                {% if s.status == 'IN_PROGRESS' %}
+                  <a class="btn" href="{% url 'web-take-exam' s.exam.id %}">Resume</a>
+                {% elif s.status == 'SUBMITTED' %}
+                  <span class="muted">Submitted</span>
+                {% elif s.status == 'GRADED' %}
+                  <a class="btn" href="{% url 'web-exam-result' s.id %}">View Result</a>
+                {% endif %}
+              </div>
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6">No sessions yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 </body>
 </html>

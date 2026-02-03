@@ -491,3 +491,36 @@ class SchedulerSetting(models.Model):
 
     def __str__(self):
         return f"Scheduler for {self.owner}" 
+
+
+# ---------------------------------------------------------
+# GLOBAL LEVEL THRESHOLDS (CL1–CL4 MIN POINTS)
+# ---------------------------------------------------------
+
+class LevelThresholdSetting(models.Model):
+    """
+    Stores global point thresholds for competency levels.
+    Not position-specific. Admins set CL1–CL4 minimum points here.
+    """
+
+    cl1_min_points = models.IntegerField(default=0)
+    cl2_min_points = models.IntegerField(default=0)
+    cl3_min_points = models.IntegerField(default=0)
+    cl4_min_points = models.IntegerField(default=0)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return "Global Level Thresholds"
+
+    @classmethod
+    def get_solo(cls):
+        obj = cls.objects.first()
+        if obj is None:
+            obj = cls.objects.create(
+                cl1_min_points=0,
+                cl2_min_points=0,
+                cl3_min_points=0,
+                cl4_min_points=0,
+            )
+        return obj

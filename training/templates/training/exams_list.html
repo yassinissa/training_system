@@ -48,7 +48,11 @@
           <div class="muted">Competency: {{ exam.competency.reference_number }} — {{ exam.competency.title }}</div>
         {% endif %}
         <div class="muted">Time limit: {{ exam.time_limit_seconds }} seconds</div>
-        <a class="btn" href="{% url 'web-take-exam' exam.id %}">Take Exam</a>
+        {% if request.user.is_authenticated and request.user.is_employee and exam.id in taken_exam_ids %}
+          <div class="muted">Already submitted</div>
+        {% else %}
+          <a class="btn" href="{% url 'web-take-exam' exam.id %}">Take Exam</a>
+        {% endif %}
       </div>
     {% endfor %}
   {% else %}

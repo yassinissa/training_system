@@ -118,3 +118,33 @@ Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/training/exam-sessions/submit/
 - Ensure `DEBUG=True` during development.
 - Images require Pillow (installed).
 - Branch names in payloads should exist; consider making branch names unique.
+
+## Frontend (React)
+
+A modern React frontend is scaffolded under `frontend/` using Vite. It provides:
+- Login (admin via username, managers/employees via employee number)
+- Role-aware Dashboard using `api/training/dashboard/summary/`
+
+### Dev Setup
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Backend dev server:
+```powershell
+C:\Users\yassi\OneDrive\Desktop\training_system\venv\Scripts\python.exe manage.py runserver
+```
+
+Vite is configured to proxy `/api` and `/media` to `http://127.0.0.1:8000`, so API calls work out-of-the-box.
+
+### Build for Production
+
+```powershell
+cd frontend
+npm run build
+```
+
+This produces `frontend/dist/`. You can serve it via any static host. Optionally, add a Django view/static config to serve the built SPA and route unknown paths to `index.html`.

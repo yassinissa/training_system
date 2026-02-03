@@ -31,7 +31,8 @@ SECRET_KEY = 'django-insecure-+%3fn+%5t6xcod7m$*3a(=4(kp02x=d5$@ig@v%2l9gzg)i@tq
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+# Allow all hosts during development to enable LAN/mobile testing
+ALLOWED_HOSTS = ['*'] if DEBUG else []
 
 
 # Application definition
@@ -170,5 +171,13 @@ LOGOUT_REDIRECT_URL = '/accounts/login/'
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
+    'http://localhost:5174',
+    'http://127.0.0.1:5174',
 ]
 
+# Session cookies expire when browser closes
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+
+# In development, allow all origins to simplify testing across devices on LAN
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True

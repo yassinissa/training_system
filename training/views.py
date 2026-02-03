@@ -1,8 +1,19 @@
+from rest_framework.generics import RetrieveAPIView
 from rest_framework import generics, permissions, status
+from training.models import ExamTemplate
+from training.serializers import ExamTemplateSerializer
+
+# Place ExamTemplateDetailView after all imports so ExamTemplate is defined
+class ExamTemplateDetailView(RetrieveAPIView):
+    queryset = ExamTemplate.objects.all()
+    serializer_class = ExamTemplateSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.utils import timezone
 from django.utils import timezone
+from datetime import date, timedelta
 from training.models import (
     Competency,
     PositionCompetencyRequirement,
@@ -12,6 +23,9 @@ from training.models import (
     QuestionChoice,
     ExamSession,
     ExamAnswer,
+        
+    EmployeeCompetencyRequirement,
+    Frequency,
 )
 
 from training.serializers import (
@@ -22,15 +36,24 @@ from training.serializers import (
     QuestionSerializer,
     QuestionChoiceSerializer,
     ExamSessionSerializer,
+    ExamSessionDetailSerializer,
+    GradingQueueSessionSerializer,
     ExamSessionStartSerializer,
     SubmitExamSerializer,
     PublishRequirementsSerializer,
+    LevelThresholdSettingSerializer,
+    EmployeeCompetencyRequirementSerializer,
 )
 from training.permissions import CanManageModules, CanManageExams, CanManageQuestions
+from training.permissions import AdminOnly
 from accounts.models import User
+from accounts.serializers import UserSerializer
 from rest_framework import serializers
 from django.db.models import Count
 from accounts.models import Position
+from training.models import LevelThresholdSetting
+from branches.models import Branch
+from django.shortcuts import get_object_or_404
 
 
 # ---------------------------------------------------------
@@ -101,16 +124,348 @@ class PositionCompetencyRequirementListView(generics.ListAPIView):
         return qs
 
 
+class PositionCompetencyRequirementDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = PositionCompetencyRequirementSerializer
+    permission_classes = [CanManageModules]
+
+    def get_queryset(self):
+        qs = PositionCompetencyRequirement.objects.all()
+        user = self.request.user
+        if user.is_manager():
+            qs = qs.filter(branch__in=user.manager_branches.all())
+        return qs
+
+
+# ---------------------------------------------------------
+# EMPLOYEE-SPECIFIC REQUIREMENTS
+# ---------------------------------------------------------
+
+class EmployeeRequirementView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        employee_id = request.query_params.get("employee_id")
+        if not employee_id:
+            return Response({"error": "employee_id is required"}, status=400)
+        qs = EmployeeCompetencyRequirement.objects.filter(employee_id=employee_id).select_related("competency", "branch", "employee")
+        user = request.user
+        if user.is_manager():
+            qs = qs.filter(branch__in=user.manager_branches.all())
+        data = EmployeeCompetencyRequirementSerializer(qs, many=True).data
+        return Response({"results": data})
+
+    def post(self, request):
+        user = request.user
+        data = request.data
+
+        employee_id = data.get("employee_id")
+        competency_id = data.get("competency_id")
+        competency_ids = data.get("competency_ids") or []
+        assignments = data.get("assignments")
+        if competency_id:
+            competency_ids.append(competency_id)
+        # Normalize to list of ints
+        competency_ids = [int(c) for c in competency_ids if c]
+        if not employee_id and not assignments:
+            return Response({"error": "employee_id is required"}, status=400)
+
+        if assignments and not isinstance(assignments, list):
+            return Response({"error": "assignments must be a list"}, status=400)
+
+        employee = get_object_or_404(User, id=employee_id)
+
+        def parse_branch(val):
+            if val in ["", None]:
+                return None
+            try:
+                return int(val)
+            except (TypeError, ValueError):
+                return "invalid"
+
+        # Build base branch (global override or employee branch)
+        base_branch_id_raw = data.get("branch_id")
+        base_branch_id = parse_branch(base_branch_id_raw)
+        if base_branch_id == "invalid":
+            return Response({"error": "branch_id must be numeric"}, status=400)
+        branch_obj = None
+        if base_branch_id:
+            branch_obj = get_object_or_404(Branch, id=base_branch_id)
+        elif employee.employee_branch_id:
+            branch_obj = employee.employee_branch
+
+        # Managers can only assign within their branches
+        def assert_branch_allowed(target_branch):
+            if not user.is_manager():
+                return
+            allowed_ids = set(user.manager_branches.values_list("id", flat=True))
+            if not allowed_ids:
+                raise permissions.PermissionDenied("No manager branches configured")
+            if target_branch is None:
+                raise permissions.PermissionDenied("Branch is required")
+            if target_branch.id not in allowed_ids:
+                raise permissions.PermissionDenied("Not allowed to assign outside your branches")
+
+        results = []
+
+        # Prefer assignments payload (per-competency settings); fallback to legacy list
+        if assignments:
+            for item in assignments:
+                cid = item.get("competency_id")
+                if not cid:
+                    continue
+                comp = get_object_or_404(Competency, id=int(cid))
+                item_branch_id_raw = item.get("branch_id")
+                item_branch_id = parse_branch(item_branch_id_raw)
+                if item_branch_id == "invalid":
+                    return Response({"error": f"branch_id must be numeric for competency {cid}"}, status=400)
+                item_branch = get_object_or_404(Branch, id=item_branch_id) if item_branch_id else branch_obj
+                assert_branch_allowed(item_branch)
+                payload = {
+                    "employee_id": employee.id,
+                    "competency_id": comp.id,
+                    "branch_id": item_branch.id if item_branch else None,
+                    "frequency": item.get("frequency") or data.get("frequency"),
+                    "priority_points": item.get("priority_points", data.get("priority_points", 0)),
+                    "required": bool(item.get("required", data.get("required", True))),
+                }
+                serializer = EmployeeCompetencyRequirementSerializer(data=payload)
+                serializer.is_valid(raise_exception=True)
+                obj = serializer.save()
+                results.append(EmployeeCompetencyRequirementSerializer(obj).data)
+        else:
+            competencies = [get_object_or_404(Competency, id=cid) for cid in competency_ids]
+
+            for comp in competencies:
+                assert_branch_allowed(branch_obj)
+                payload = {
+                    "employee_id": employee.id,
+                    "competency_id": comp.id,
+                    "branch_id": branch_obj.id if branch_obj else None,
+                    "frequency": data.get("frequency"),
+                    "priority_points": data.get("priority_points", 0),
+                    "required": bool(data.get("required", True)),
+                }
+
+                serializer = EmployeeCompetencyRequirementSerializer(data=payload)
+                serializer.is_valid(raise_exception=True)
+                obj = serializer.save()
+                results.append(EmployeeCompetencyRequirementSerializer(obj).data)
+
+
+        return Response({"results": results}, status=status.HTTP_201_CREATED)
+
+
+# ---------------------------------------------------------
+# EXPIRING COMPETENCIES (ADMIN/MANAGER)
+# ---------------------------------------------------------
+
+class ExpiringCompetenciesView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _normalize_int(self, val):
+        if val in [None, ""]:
+            return None
+        try:
+            return int(val)
+        except (TypeError, ValueError):
+            return "invalid"
+
+    def _compute_expiry(self, completed, freq):
+        if not completed:
+            return None
+        d = completed
+        if hasattr(completed, "date"):
+            d = completed.date()
+        if freq == Frequency.YEARLY:
+            return d + timedelta(days=365)
+        return None
+
+    def _serialize_item(self, employee, requirement, record, expiry_date, days_remaining):
+        return {
+            "employee": {
+                "id": employee.id,
+                "username": employee.username,
+                "employee_number": employee.employee_number,
+            },
+            "branch": {
+                "id": requirement.branch_id,
+                "name": getattr(requirement.branch, "name", None),
+            },
+            "position": {
+                "id": requirement.position_id,
+                "name": getattr(requirement.position, "name", None),
+            },
+            "competency": {
+                "id": requirement.competency_id,
+                "title": getattr(requirement.competency, "title", None),
+                "reference_number": getattr(requirement.competency, "reference_number", None),
+            },
+            "expiry_date": expiry_date,
+            "days_remaining": days_remaining,
+            "status": getattr(record, "status", EmployeeCompetencyRecord.Status.NOT_STARTED),
+        }
+
+    def get(self, request):
+        user = request.user
+        if not (user.is_admin() or user.is_manager()):
+            return Response({"error": "Only managers/admins can view expiring competencies"}, status=403)
+
+        branch_id_raw = request.query_params.get("branch")
+        position_id_raw = request.query_params.get("position")
+        window_raw = request.query_params.get("window", 90)
+
+        branch_id = self._normalize_int(branch_id_raw)
+        position_id = self._normalize_int(position_id_raw)
+        if branch_id == "invalid" or position_id == "invalid":
+            return Response({"error": "branch/position must be numeric"}, status=400)
+        try:
+            window_days = max(1, min(365, int(window_raw)))
+        except (TypeError, ValueError):
+            window_days = 90
+
+        req_qs = PositionCompetencyRequirement.objects.filter(required=True)
+        if user.is_manager():
+            req_qs = req_qs.filter(branch__in=user.manager_branches.all())
+            if branch_id and branch_id not in set(user.manager_branches.values_list("id", flat=True)):
+                return Response({"error": "Not allowed to view other branches"}, status=403)
+        if branch_id:
+            req_qs = req_qs.filter(branch_id=branch_id)
+        if position_id:
+            req_qs = req_qs.filter(position_id=position_id)
+
+        emp_qs = User.objects.filter(role=User.Roles.EMPLOYEE)
+        if user.is_manager():
+            emp_qs = emp_qs.filter(employee_branch__in=user.manager_branches.all())
+        if branch_id:
+            emp_qs = emp_qs.filter(employee_branch_id=branch_id)
+        if position_id:
+            emp_qs = emp_qs.filter(position_id=position_id)
+
+        employees = {e.id: e for e in emp_qs.select_related("position", "employee_branch")}
+
+        today = date.today()
+        expiring = []
+        overdue = []
+
+        for r in req_qs.select_related("competency", "position", "branch"):
+            freq = r.frequency or getattr(r.competency, "frequency", None)
+            if freq != Frequency.YEARLY:
+                continue
+
+            for e in employees.values():
+                if getattr(e, "position_id", None) != r.position_id:
+                    continue
+                if getattr(e, "employee_branch_id", None) != r.branch_id:
+                    continue
+
+                rec = EmployeeCompetencyRecord.objects.filter(employee=e, competency=r.competency).order_by("-date_completed").first()
+                expiry_date = self._compute_expiry(getattr(rec, "date_completed", None), freq)
+                if not expiry_date:
+                    overdue.append(self._serialize_item(e, r, rec, None, None))
+                    continue
+
+                days_remaining = (expiry_date - today).days
+                item = self._serialize_item(e, r, rec, expiry_date, days_remaining)
+                if days_remaining < 0:
+                    overdue.append(item)
+                elif days_remaining <= window_days:
+                    expiring.append(item)
+
+        expiring.sort(key=lambda x: x.get("days_remaining") if x.get("days_remaining") is not None else 99999)
+        overdue.sort(key=lambda x: x.get("days_remaining") if x.get("days_remaining") is not None else -99999)
+
+        return Response({
+            "expiring": expiring,
+            "overdue": overdue,
+            "window_days": window_days,
+        })
+
+    def post(self, request):
+        user = request.user
+        if not (user.is_admin() or user.is_manager()):
+            return Response({"error": "Only managers/admins can update expiring competencies"}, status=403)
+        action = request.data.get("action")
+        if action != "retrain":
+            return Response({"error": "Unsupported action"}, status=400)
+
+        emp_id = request.data.get("employee_id")
+        comp_id = request.data.get("competency_id")
+        if not emp_id or not comp_id:
+            return Response({"error": "employee_id and competency_id are required"}, status=400)
+
+        employee = get_object_or_404(User, id=emp_id)
+        if user.is_manager():
+            allowed = set(user.manager_branches.values_list("id", flat=True))
+            if employee.employee_branch_id and employee.employee_branch_id not in allowed:
+                return Response({"error": "Not allowed to modify other branches"}, status=403)
+
+        rec, _ = EmployeeCompetencyRecord.objects.get_or_create(employee=employee, competency_id=comp_id)
+        rec.status = EmployeeCompetencyRecord.Status.RETRAIN
+        rec.save(update_fields=["status"])
+        return Response({"message": "Marked as retrain"})
+
+
 # ---------------------------------------------------------
 # EMPLOYEE COMPETENCY PROGRESS
 # ---------------------------------------------------------
 
-class MyCompetenciesView(generics.ListAPIView):
-    serializer_class = EmployeeCompetencyRecordSerializer
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+class MyCompetenciesView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_queryset(self):
-        return EmployeeCompetencyRecord.objects.filter(employee=self.request.user)
+    def get(self, request, *args, **kwargs):
+        user = request.user
+        # Get all required competencies for user's position and branch
+        position = getattr(user, 'position', None)
+        branch = getattr(user, 'employee_branch', None)
+        required_comps = []
+        if position and branch:
+            required_comps = PositionCompetencyRequirement.objects.filter(
+                position=position, branch=branch, required=True
+            ).select_related('competency')
+        # Get all employee-specific requirements
+        emp_specific = EmployeeCompetencyRequirement.objects.filter(
+            employee=user, required=True
+        ).select_related('competency')
+        # Merge all required competencies (by id)
+        all_required = {r.competency.id: r.competency for r in required_comps if r.competency}
+        for e in emp_specific:
+            if e.competency:
+                all_required[e.competency.id] = e.competency
+        # Get all EmployeeCompetencyRecords for user
+        records = EmployeeCompetencyRecord.objects.filter(employee=user)
+        record_map = {rec.competency_id: rec for rec in records}
+        # Build response: for each required competency, return record if exists, else dummy record
+        from training.serializers import EmployeeCompetencyRecordSerializer, CompetencySerializer
+        result = []
+        for comp_id, comp in all_required.items():
+            rec = record_map.get(comp_id)
+            if rec:
+                data = EmployeeCompetencyRecordSerializer(rec).data
+            else:
+                # Build a dummy record with status NOT_STARTED
+                data = {
+                    'id': None,
+                    'employee': None,
+                    'competency': CompetencySerializer(comp).data,
+                    'status': 'NOT_STARTED',
+                    'score': 0,
+                    'points_earned': 0,
+                    'date_completed': None,
+                    'week': None,
+                    'period': None,
+                    'quarter': None,
+                    'attempts_count': 0,
+                }
+            result.append(data)
+        # Optionally, include records for competencies not required but already completed by user
+        for rec in records:
+            if rec.competency_id not in all_required:
+                data = EmployeeCompetencyRecordSerializer(rec).data
+                result.append(data)
+        return Response(result)
 
 
 # ---------------------------------------------------------
@@ -132,11 +487,16 @@ class ExamTemplateListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        import logging
+        logger = logging.getLogger("training.exam_debug")
         qs = ExamTemplate.objects.filter(is_active=True)
         user = self.request.user
         branch_param = self.request.query_params.get("branch")
         competency_param = self.request.query_params.get("competency")
         position_param = self.request.query_params.get("position")
+
+        logger.info(f"ExamTemplateListView.get_queryset called by user {user} (role={getattr(user, 'role', None)})")
+        logger.info(f"Params: branch={branch_param}, competency={competency_param}, position={position_param}")
 
         if user.is_admin() or user.is_manager():
             if competency_param:
@@ -148,16 +508,24 @@ class ExamTemplateListView(generics.ListAPIView):
                 )
                 if position_param:
                     allowed = allowed.filter(position_id=position_param)
-                qs = qs.filter(competency_id__in=allowed.values_list("competency_id", flat=True))
+                allowed_competency_ids = list(allowed.values_list("competency_id", flat=True))
+                logger.info(f"Manager allowed branches: {[b.id for b in user.manager_branches.all()]}")
+                logger.info(f"Allowed PositionCompetencyRequirement count: {allowed.count()}")
+                logger.info(f"Allowed competency_ids: {allowed_competency_ids}")
+                qs = qs.filter(competency_id__in=allowed_competency_ids)
+            logger.info(f"Returning queryset count: {qs.count()}")
             return qs
 
         # Employees: only exams for their position/branch via requirements
         from training.models import PositionCompetencyRequirement
-        competency_ids = PositionCompetencyRequirement.objects.filter(
+        competency_ids = list(PositionCompetencyRequirement.objects.filter(
             position=user.position,
             branch=user.employee_branch,
-        ).values_list("competency_id", flat=True)
-        return qs.filter(competency_id__in=competency_ids)
+        ).values_list("competency_id", flat=True))
+        logger.info(f"Employee allowed competency_ids: {competency_ids}")
+        result = qs.filter(competency_id__in=competency_ids)
+        logger.info(f"Returning queryset count: {result.count()}")
+        return result
 
 
 # ---------------------------------------------------------
@@ -189,10 +557,21 @@ class QuestionChoiceListCreateView(generics.ListCreateAPIView):
 # EXAM SESSION (START EXAM)
 # ---------------------------------------------------------
 
+import logging
+
 class StartExamSessionView(generics.CreateAPIView):
     queryset = ExamSession.objects.all()
     serializer_class = ExamSessionStartSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def create(self, request, *args, **kwargs):
+        print("[DEBUG] StartExamSessionView.create called")
+        print(f"[DEBUG] User: {request.user} (id={getattr(request.user, 'id', None)})")
+        print(f"[DEBUG] Data: {request.data}")
+        response = super().create(request, *args, **kwargs)
+        print(f"[DEBUG] Response status: {response.status_code}")
+        print(f"[DEBUG] Response data: {getattr(response, 'data', None)}")
+        return response
 
 
 class MyExamSessionsView(generics.ListAPIView):
@@ -236,12 +615,68 @@ class ManagerExamSessionsView(generics.ListAPIView):
         return qs
 
 
+class ManagerExamSessionDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        user = request.user
+        base_qs = ExamSession.objects.select_related("employee", "exam").prefetch_related(
+            "answers__question__choices",
+            "answers__selected_choices",
+        )
+
+        if user.is_admin():
+            session = get_object_or_404(base_qs, pk=pk)
+        elif user.is_manager():
+            session = get_object_or_404(base_qs.filter(employee__employee_branch__in=user.manager_branches.all()), pk=pk)
+        else:
+            return Response({"error": "Not allowed"}, status=403)
+
+        data = ExamSessionDetailSerializer(session).data
+        return Response(data)
+
+
+class ManagerGradingQueueView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if not (user.is_admin() or user.is_manager()):
+            return Response({"error": "Not allowed"}, status=403)
+
+        base_qs = ExamSession.objects.filter(status=ExamSession.Status.SUBMITTED).select_related(
+            "employee",
+            "employee__employee_branch",
+            "exam",
+        ).prefetch_related("answers__question", "answers__selected_choices")
+
+        if user.is_manager():
+            base_qs = base_qs.filter(employee__employee_branch__in=user.manager_branches.all())
+
+        sessions = list(base_qs)
+
+        # Attach prefetched answers to avoid repeated queries in serializer manual checks
+        for s in sessions:
+            s._prefetched_answers = list(s.answers.all())
+
+        manual_needed_count = sum(1 for s in sessions if any((not a.is_auto_graded()) and a.points_awarded is None for a in s._prefetched_answers))
+        auto_only_count = sum(1 for s in sessions if all(a.is_auto_graded() for a in s._prefetched_answers))
+
+        data = GradingQueueSessionSerializer(sessions, many=True).data
+        return Response({
+            "manual_needed": manual_needed_count,
+            "auto_only": auto_only_count,
+            "results": data,
+        })
+
+
 # ---------------------------------------------------------
 # SUBMIT EXAM + AUTO-GRADE
 # ---------------------------------------------------------
 
 class SubmitExamView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+
 
     def post(self, request):
         session_id = request.data.get("session_id")
@@ -251,7 +686,22 @@ class SubmitExamView(APIView):
         try:
             session = ExamSession.objects.get(id=session_id, employee=request.user)
         except ExamSession.DoesNotExist:
-            return Response({"error": "Invalid session"}, status=400)
+            # Debug: log session_id, current user, and session owner if exists
+            from django.contrib.auth import get_user_model
+            import sys
+            User = get_user_model()
+            session_owner = None
+            try:
+                s = ExamSession.objects.get(id=session_id)
+                session_owner = s.employee.username
+            except Exception:
+                session_owner = None
+            print(f"[DEBUG] Invalid session submit: session_id={session_id}, current_user={request.user.username}, session_owner={session_owner}", file=sys.stderr)
+            return Response({"error": "Invalid session", "debug": {
+                "session_id": session_id,
+                "current_user": request.user.username,
+                "session_owner": session_owner
+            }}, status=400)
 
         exam = session.exam
         employee = request.user
@@ -289,10 +739,10 @@ class SubmitExamView(APIView):
                 ans.save()
                 total_score += float(auto_points)
 
-        # Update session state
+        # Update session state; if expired, mark accordingly
         session.score = total_score
         session.max_score = max_score
-        session.status = ExamSession.Status.SUBMITTED
+        session.status = ExamSession.Status.EXPIRED if expired else ExamSession.Status.SUBMITTED
         session.submitted_at = timezone.now()
         session.save()
 
@@ -333,7 +783,7 @@ class GradeExamView(APIView):
             if not employee_branch or employee_branch not in user.manager_branches.all():
                 return Response({"error": "Not allowed to grade this session"}, status=403)
 
-        if session.status != ExamSession.Status.SUBMITTED:
+        if session.status not in [ExamSession.Status.SUBMITTED, ExamSession.Status.GRADED]:
             return Response({"error": "Exam must be submitted first"}, status=400)
 
         # Optional override of status by manager; else threshold pass/fail
@@ -532,8 +982,10 @@ class PublishRequirementsView(APIView):
 
 # ---------------------------------------------------------
 # DASHBOARD SUMMARY
-# ---------------------------------------------------------
+# 
 
+
+         
 class DashboardSummaryView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -653,3 +1105,126 @@ class NonComplianceReportView(APIView):
             "non_compliant_count": len(non_compliant),
             "non_compliant": non_compliant,
         })
+
+
+# ---------------------------------------------------------
+# EMPLOYEE ACTIVITY (ADMIN/MANAGER)
+# ---------------------------------------------------------
+
+class EmployeeActivityView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if not (user.is_admin() or user.is_manager()):
+            return Response({"error": "Not allowed"}, status=403)
+
+        emp_id = request.query_params.get("id")
+        emp_no = request.query_params.get("employee_number")
+
+        try:
+            if emp_id:
+                employee = User.objects.select_related("position", "employee_branch").get(id=emp_id)
+            elif emp_no:
+                employee = User.objects.select_related("position", "employee_branch").get(employee_number=emp_no)
+            else:
+                return Response({"error": "Provide id or employee_number"}, status=400)
+        except User.DoesNotExist:
+            return Response({"error": "Employee not found"}, status=404)
+
+        # Managers may only view employees within their branches
+        if user.is_manager():
+            if not employee.employee_branch or employee.employee_branch not in user.manager_branches.all():
+                return Response({"error": "Not allowed to view this employee"}, status=403)
+
+        # Totals & level
+        total_points = employee.get_total_points()
+        level = employee.get_competency_level() 
+        pos = employee.position
+        min_required_level = getattr(pos, "min_required_level", None)
+        level_rank = {"CL0": 0, "CL1": 1, "CL2": 2, "CL3": 3, "CL4": 4}
+        below_min_level = False
+        try:
+            if min_required_level:
+                below_min_level = level_rank.get(level, 0) < level_rank.get(min_required_level, 0)
+        except Exception:
+            below_min_level = False
+
+        # Missing required competencies for this employee (by position+branch)
+        req_qs = PositionCompetencyRequirement.objects.filter(required=True)
+        if employee.position:
+            req_qs = req_qs.filter(position=employee.position)
+        else:
+            req_qs = req_qs.none()
+        if employee.employee_branch:
+            req_qs = req_qs.filter(branch=employee.employee_branch)
+        else:
+            req_qs = req_qs.none()
+
+        missing = []
+        for r in req_qs.select_related("competency"):
+            has_passed = EmployeeCompetencyRecord.objects.filter(
+                employee=employee,
+                competency=r.competency,
+                status=EmployeeCompetencyRecord.Status.PASSED,
+            ).exists()
+            if not has_passed:
+                missing.append({
+                    "id": r.competency_id,
+                    "title": r.competency.title if r.competency else None,
+                    "reference_number": r.competency.reference_number if r.competency else None,
+                })
+
+        # Records & sessions
+        records_qs = EmployeeCompetencyRecord.objects.select_related("competency").filter(employee=employee).order_by("-date_completed", "-id")
+        sessions_qs = ExamSession.objects.select_related("exam").filter(employee=employee).order_by("-started_at", "-id")
+
+        records_by_status = list(records_qs.values("status").annotate(count=Count("id")))
+        sessions_by_status = list(sessions_qs.values("status").annotate(count=Count("id")))
+
+        return Response({
+            "user": UserSerializer(employee).data,
+            "totals": {
+                "total_points": total_points,
+                "competency_level": level,
+                "min_required_level": min_required_level,
+                "below_min_level": below_min_level,
+            },
+            "missing_competencies": missing,
+            "records": EmployeeCompetencyRecordSerializer(records_qs, many=True).data,
+            "records_by_status": records_by_status,
+            "sessions": ExamSessionSerializer(sessions_qs, many=True).data,
+            "sessions_by_status": sessions_by_status,
+        })
+
+
+# ---------------------------------------------------------
+# GLOBAL LEVEL THRESHOLDS (GET/UPDATE)
+# ---------------------------------------------------------
+
+class LevelThresholdsView(APIView):
+    """Admin-configurable global CL1–CL4 minimum points."""
+    permission_classes = [AdminOnly]
+
+    def get(self, request):
+        obj = LevelThresholdSetting.get_solo()
+        return Response(LevelThresholdSettingSerializer(obj).data)
+
+    def post(self, request):
+        obj = LevelThresholdSetting.get_solo()
+        serializer = LevelThresholdSettingSerializer(instance=obj, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+
+        # Validate monotonicity
+        data = serializer.validated_data
+        cl1 = data.get("cl1_min_points", obj.cl1_min_points)
+        cl2 = data.get("cl2_min_points", obj.cl2_min_points)
+        cl3 = data.get("cl3_min_points", obj.cl3_min_points)
+        cl4 = data.get("cl4_min_points", obj.cl4_min_points)
+        if cl1 < 0 or cl2 < 0 or cl3 < 0 or cl4 < 0:
+            return Response({"error": "Points must be non-negative"}, status=400)
+        if not (cl1 <= cl2 <= cl3 <= cl4):
+            return Response({"error": "Ensure CL1 ≤ CL2 ≤ CL3 ≤ CL4"}, status=400)
+
+        serializer.save()
+        return Response(serializer.data)

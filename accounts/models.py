@@ -4,6 +4,7 @@ from django.db.models import Sum
 
 from branches.models import Branch
 from training.models import CompetencyLevel, EmployeeCompetencyRecord
+from training.models import LevelThresholdSetting
 
 
 class Position(models.Model):
@@ -87,6 +88,8 @@ class User(AbstractUser):
         blank=True,
     )
 
+    profile_picture = models.ImageField(upload_to="profile_pics/", blank=True, null=True)
+
     # NOTE:
     # We do NOT store current competency level or total points as fields anymore.
     # They are derived from EmployeeCompetencyRecord to avoid manual input and duplication.
@@ -115,21 +118,19 @@ class User(AbstractUser):
 
     def get_competency_level(self) -> str:
         """
-        Returns CL0–CL4 based on the user's position thresholds and total points.
+        Returns CL0–CL4 based on global thresholds and total points.
         Uses training.models.CompetencyLevel choices.
-        If the user has no position, returns CL0.
         """
-        if not self.position:
-            return CompetencyLevel.CL0
-
         total_points = self.get_total_points()
-        pos = self.position
+        thresholds = LevelThresholdSetting.get_solo()
+        cl1 = thresholds.cl1_min_points or 0
+        cl2 = thresholds.cl2_min_points or 0
+        cl3 = thresholds.cl3_min_points or 0
+        cl4 = thresholds.cl4_min_points or 0
 
-        # Safeguard: treat None as 0
-        cl1 = pos.cl1_min_points or 0
-        cl2 = pos.cl2_min_points or 0
-        cl3 = pos.cl3_min_points or 0
-        cl4 = pos.cl4_min_points or 0
+        # If thresholds are unset (all zero), treat level as CL0
+        if cl1 == 0 and cl2 == 0 and cl3 == 0 and cl4 == 0:
+            return CompetencyLevel.CL0
 
         if total_points >= cl4:
             return CompetencyLevel.CL4

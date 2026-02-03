@@ -4,46 +4,160 @@
   <meta charset="UTF-8">
   <title>Exam Result — {{ session.exam.title }}</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 2rem; }
-    .summary { padding: 1rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 1rem; }
-    .answer { padding: 0.75rem; border-bottom: 1px solid #eee; }
-    .correct { color: #0a7a2c; }
-    .wrong { color: #b00020; }
-    a.btn { display: inline-block; margin-top: 0.5rem; padding: 0.4rem 0.8rem; background: #2d6cdf; color: #fff; text-decoration: none; border-radius: 4px; }
+    :root {
+      color-scheme: light;
+      --bg: #f6f8fb;
+      --surface: #ffffff;
+      --border: #e5e7eb;
+      --text: #0f172a;
+      --muted: #4b5563;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --pill: #e0e7ff;
+      --good: #16a34a;
+      --warn: #f59e0b;
+      --bad: #dc2626;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 24px 48px;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .page { max-width: 980px; margin: 0 auto; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(15, 23, 42, 0.06);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+    .title { margin: 6px 0 4px; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+    .meta { color: var(--muted); margin: 2px 0; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--pill);
+      color: var(--primary-dark);
+      font-weight: 600;
+      font-size: 13px;
+      border: 1px solid #c7d2fe;
+    }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 13px;
+      border: 1px solid var(--border);
+      background: #f9fafb;
+      color: var(--muted);
+    }
+    .status.SUBMITTED { background: #fef9c3; color: #92400e; border-color: #fcd34d; }
+    .status.GRADED { background: #dcfce7; color: #166534; border-color: #86efac; }
+    .status.FAILED { background: #fee2e2; color: #b91c1c; border-color: #fecdd3; }
+    .status.EXPIRED { background: #e5e7eb; color: #374151; border-color: #d1d5db; }
+    .scores { display: flex; gap: 14px; align-items: center; margin-top: 6px; }
+    .score-box {
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      font-weight: 600;
+    }
+    h3 { margin: 12px 0 10px; }
+    .answer {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      background: #fcfdff;
+      margin-bottom: 10px;
+    }
+    .answer h4 { margin: 0 0 6px; display: flex; gap: 8px; align-items: center; }
+    .q-number {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--pill);
+      color: var(--primary-dark);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .muted { color: var(--muted); font-size: 13px; }
+    .points { font-weight: 600; }
+    .row { margin: 4px 0; }
+    a.btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 10px;
+      padding: 10px 16px;
+      background: var(--primary);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      box-shadow: 0 6px 18px rgba(37, 99, 235, 0.25);
+      transition: background 0.15s ease, transform 0.15s ease;
+    }
+    a.btn:hover { background: var(--primary-dark); transform: translateY(-1px); }
+    a.btn:active { transform: translateY(0); }
   </style>
 </head>
 <body>
-  <h1>Exam Result</h1>
-  <div class="summary">
-    <div>Exam: {{ session.exam.title }}</div>
-    <div>Status: {{ session.status }}</div>
-    <div>Score: {{ session.score|default:0 }} / {{ session.max_score|default:0 }}</div>
-  </div>
-
-  <h3>Your Answers</h3>
-  {% for ans in answers %}
-    <div class="answer">
-      <div><strong>Q{{ ans.question.order }}:</strong> {{ ans.question.text }}</div>
-      {% if ans.selected_choices.all %}
-        <div>Selected:
-          {% for ch in ans.selected_choices.all %}
-            <span>{{ ch.text }}</span>{% if not forloop.last %}, {% endif %}
-          {% endfor %}
+  <div class="page">
+    <div class="card">
+      <div class="header">
+        <div>
+          <p class="pill">Exam Result</p>
+          <h1 class="title">{{ session.exam.title }}</h1>
+          <div class="meta">Exam ID: {{ session.exam.id }}</div>
+          <div class="scores">
+            <span class="status {{ session.status }}">Status: {{ session.status }}</span>
+            <span class="score-box">Score: {{ session.score|default:0 }} / {{ session.max_score|default:0 }}</span>
+          </div>
         </div>
-      {% endif %}
-      {% if ans.text_answer %}
-        <div>Answer: {{ ans.text_answer }}</div>
-      {% endif %}
-      {% if ans.points_awarded is not None %}
-        <div>Points: {{ ans.points_awarded }} / {{ ans.question.max_points }}</div>
-      {% else %}
-        <div class="muted">Awaiting manual grading</div>
-      {% endif %}
+      </div>
     </div>
-  {% empty %}
-    <p>No answers found.</p>
-  {% endfor %}
 
-  <a class="btn" href="{% url 'web-exams-list' %}">Back to Exams</a>
+    <div class="card">
+      <h3>Your Answers</h3>
+      {% for ans in answers %}
+        <div class="answer">
+          <h4><span class="q-number">{{ ans.question.order }}</span> {{ ans.question.text }}</h4>
+          {% if ans.selected_choices.all %}
+            <div class="row">Selected: 
+              {% for ch in ans.selected_choices.all %}
+                <span>{{ ch.text }}</span>{% if not forloop.last %}, {% endif %}
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% if ans.text_answer %}
+            <div class="row">Answer: {{ ans.text_answer }}</div>
+          {% endif %}
+          {% if ans.points_awarded is not None %}
+            <div class="row points">Points: {{ ans.points_awarded }} / {{ ans.question.max_points }}</div>
+          {% else %}
+            <div class="row muted">Awaiting manual grading</div>
+          {% endif %}
+        </div>
+      {% empty %}
+        <p class="muted">No answers found.</p>
+      {% endfor %}
+
+      <a class="btn" href="{% url 'web-exams-list' %}">Back to Exams</a>
+    </div>
+  </div>
 </body>
 </html>

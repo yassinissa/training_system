@@ -1,0 +1,16 @@
+# Add this to your Django settings.py to enable debug logging for exam view
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'training.exam_debug': {
+            'handlers': ['console'],
+            'level': 'INFO',
+        },
+    },
+}

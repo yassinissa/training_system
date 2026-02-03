@@ -11,6 +11,8 @@ from accounts.views import (
     CustomLoginView,
     PositionViewSet, 
     PromoteEmployeeView,
+    AdminUserListView,
+    AdminUserUpdateView,
 )
 from accounts.auth_views import RefreshView
 from accounts.views import PositionViewSet
@@ -40,17 +42,23 @@ urlpatterns = [
     path("api/auth/login/", CustomLoginView.as_view(), name="custom-login"),
     path("api/auth/refresh/", RefreshView.as_view(), name="token_refresh"),
     path("api/accounts/promote/", PromoteEmployeeView.as_view(), name="promote-employee"),
+    path("api/accounts/admin/users/", AdminUserListView.as_view(), name="admin-user-list"),
+    path("api/accounts/admin/users/update/", AdminUserUpdateView.as_view(), name="admin-user-update"),
     # v1 aliases
     path("api/v1/auth/login/", CustomLoginView.as_view()),
     path("api/v1/auth/refresh/", RefreshView.as_view()),
     path("api/v1/accounts/promote/", PromoteEmployeeView.as_view()),
+
+
+    # Accounts API (profile, etc.)
+    path("api/accounts/", include("accounts.urls")),
 
     # Training system (competencies, exams, sessions, etc.)
     path("api/training/", include("training.urls")),
     path("api/v1/training/", include("training.urls")),
 
     # Simple frontend pages (temporary)
-    path("web/exams/", include("training.web_urls")),
+    # path("web/exams/", include("training.web_urls")),  # Removed to switch to React-only navigation
 
     # Session-based authentication (login/logout/password views)
     path("accounts/", include("django.contrib.auth.urls")),

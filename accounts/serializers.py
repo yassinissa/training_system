@@ -14,6 +14,7 @@ class PositionSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
+            "min_required_level",
             "department",
             "cl1_min_points",
             "cl2_min_points",
@@ -30,6 +31,11 @@ class UserSerializer(serializers.ModelSerializer):
     position = PositionSerializer(read_only=True)
     employee_branch = serializers.StringRelatedField()
     manager_branches = serializers.StringRelatedField(many=True)
+    profile_picture = serializers.ImageField(read_only=True)
+    # Extras for frontend mapping
+    employee_branch_id = serializers.SerializerMethodField(method_name='get_employee_branch_id')
+    manager_branch_ids = serializers.SerializerMethodField(method_name='get_manager_branch_ids')
+    manager_branches_detail = serializers.SerializerMethodField(method_name='get_manager_branches_detail')
     current_competency_level = serializers.SerializerMethodField()
     total_competency_points = serializers.SerializerMethodField()
 
@@ -43,8 +49,12 @@ class UserSerializer(serializers.ModelSerializer):
             "position",
             "employee_branch",
             "manager_branches",
+            "employee_branch_id",
+            "manager_branch_ids",
+            "manager_branches_detail",
             "current_competency_level",
             "total_competency_points",
+            "profile_picture",
         ]
 
     def get_current_competency_level(self, obj):
@@ -52,6 +62,27 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_total_competency_points(self, obj):
         return obj.get_total_points()
+
+    def get_employee_branch_id(self, obj):
+        try:
+            return getattr(getattr(obj, 'employee_branch', None), 'id', None)
+        except Exception:
+            return None
+
+    def get_manager_branch_ids(self, obj):
+        try:
+            return list(getattr(obj, 'manager_branches', []).values_list('id', flat=True))
+        except Exception:
+            return []
+
+    def get_manager_branches_detail(self, obj):
+        try:
+            return [
+                { 'id': b.id, 'name': b.name, 'location': getattr(b, 'location', '') }
+                for b in getattr(obj, 'manager_branches', []).all()
+            ]
+        except Exception:
+            return []
 
 
 # ---------------------------------------------------------
@@ -98,6 +129,7 @@ class EmployeeRegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
+            "id",
             "username",
             "password",
             "employee_number",

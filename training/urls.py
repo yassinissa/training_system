@@ -4,14 +4,18 @@ from training.views import (
     CompetencyDetailView,
     PositionCompetencyRequirementCreateView,
     PositionCompetencyRequirementListView,
+    PositionCompetencyRequirementDetailView,
     MyCompetenciesView,
     ExamTemplateCreateView,
     ExamTemplateListView,
+    ExamTemplateDetailView,
     QuestionListCreateView,
     QuestionChoiceListCreateView,
     StartExamSessionView,
     MyExamSessionsView,
     ManagerExamSessionsView,
+    ManagerExamSessionDetailView,
+    ManagerGradingQueueView,
     SubmitExamView,
     GradeExamView,
     GradeAnswerView,
@@ -19,7 +23,12 @@ from training.views import (
     PublishRequirementsView,
     DashboardSummaryView,
     NonComplianceReportView,
+    EmployeeActivityView,
+    LevelThresholdsView,
+    EmployeeRequirementView,
+    ExpiringCompetenciesView,
 )
+from training.views_frontend import EmployeeDashboardAPIView
    
 urlpatterns = [
 
@@ -34,6 +43,7 @@ urlpatterns = [
     # ---------------------------------------------------------
     path("position-requirements/", PositionCompetencyRequirementCreateView.as_view(), name="position-competency-create"),
     path("position-requirements/list/", PositionCompetencyRequirementListView.as_view(), name="position-competency-list"),
+    path("position-requirements/<int:pk>/", PositionCompetencyRequirementDetailView.as_view(), name="position-competency-detail"),
 
     # ---------------------------------------------------------
     # EMPLOYEE COMPETENCY PROGRESS
@@ -45,6 +55,7 @@ urlpatterns = [
     # ---------------------------------------------------------
     path("exams/", ExamTemplateCreateView.as_view(), name="exam-template-create"),
     path("exams/list/", ExamTemplateListView.as_view(), name="exam-template-list"),
+    path("exams/<int:pk>/", ExamTemplateDetailView.as_view(), name="exam-template-detail"),
 
     # ---------------------------------------------------------
     # QUESTIONS + CHOICES
@@ -58,6 +69,8 @@ urlpatterns = [
     path("exam/start/", StartExamSessionView.as_view(), name="start-exam"),
     path("exam/sessions/", MyExamSessionsView.as_view(), name="my-exam-sessions"),
     path("exam/sessions/manage/", ManagerExamSessionsView.as_view(), name="manage-exam-sessions"),
+    path("exam/sessions/<int:pk>/", ManagerExamSessionDetailView.as_view(), name="manage-exam-session-detail"),
+    path("exam/grading-queue/", ManagerGradingQueueView.as_view(), name="manage-exam-grading-queue"),
 
     # ---------------------------------------------------------
     # SUBMIT EXAM + AUTO-GRADE
@@ -65,8 +78,13 @@ urlpatterns = [
     path("exam/submit/", SubmitExamView.as_view(), name="submit-exam"),
     path("exam/answer/grade/", GradeAnswerView.as_view(), name="grade-answer"),
     path("requirements/publish/", PublishRequirementsView.as_view(), name="publish-requirements"),
+    path("employee/requirements/", EmployeeRequirementView.as_view(), name="employee-requirements"),
+    path("expiring/", ExpiringCompetenciesView.as_view(), name="expiring-competencies"),
     path("dashboard/summary/", DashboardSummaryView.as_view(), name="dashboard-summary"),
     path("compliance/missing/", NonComplianceReportView.as_view(), name="non-compliance-report"),
+    path("employee/activity/", EmployeeActivityView.as_view(), name="employee-activity"),
+    # Global level thresholds
+    path("levels/thresholds/", LevelThresholdsView.as_view(), name="levels-thresholds"),
 
     # ---------------------------------------------------------
     # MANUAL GRADING
@@ -74,5 +92,10 @@ urlpatterns = [
     path("exam/grade/<int:session_id>/", GradeExamView.as_view(), name="grade-exam"),
     path("records/", CompetencyRecordListView.as_view(), name="competency-records"),
     path("my-competencies/", MyCompetenciesView.as_view(), name="my-competencies"),
+
+    # ---------------------------------------------------------
+    # EMPLOYEE DASHBOARD
+    # ---------------------------------------------------------
+    path("employee/dashboard/", EmployeeDashboardAPIView.as_view(), name="employee-dashboard-api"),
 
 ]

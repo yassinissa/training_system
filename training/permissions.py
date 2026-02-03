@@ -14,3 +14,8 @@ class CanManageExams(BasePermission):
 class CanManageQuestions(BasePermission):
     def has_permission(self, request, view):
         return request.user.role in [User.Roles.ADMIN, User.Roles.MANAGER]
+
+
+class AdminOnly(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role == User.Roles.ADMIN

@@ -70,7 +70,16 @@
         <li>
           {{ e.title }} — Time limit {{ e.time_limit_seconds }}s
           {% if record.status != 'NOT_STARTED' %}
-            <a class="btn" style="margin-left:8px; background:#28a745;" href="{% url 'web-take-exam' e.id %}">Take Exam</a>
+            {% if latest_session and latest_session.exam_id == e.id %}
+              {% if latest_session.status == 'IN_PROGRESS' %}
+                <a class="btn" style="margin-left:8px; background:#2563eb;" href="{% url 'web-take-exam' e.id %}">Resume</a>
+              {% else %}
+                <span class="muted" style="margin-left:8px;">Submitted ({{ latest_session.status }})</span>
+                <a class="btn" style="margin-left:8px; background:#2563eb;" href="{% url 'web-exam-result' latest_session.id %}">View</a>
+              {% endif %}
+            {% else %}
+              <a class="btn" style="margin-left:8px; background:#2563eb;" href="{% url 'web-take-exam' e.id %}">Take Exam</a>
+            {% endif %}
           {% else %}
             <span class="muted" style="margin-left:8px;">Start course to unlock</span>
           {% endif %}
