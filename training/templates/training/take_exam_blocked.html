@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="alert alert-warning" style="margin: 40px auto; max-width: 600px; text-align: center;">
+    <h2>Exam Access Blocked</h2>
+    <p>{{ reason }}</p>
+    <a href="{% url 'web-exams-list' %}" class="btn">Back to Exams List</a>
+  </div>
+{% endblock %}

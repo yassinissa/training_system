@@ -20,6 +20,39 @@ from branches.serializers import BranchSerializer
 # ---------------------------------------------------------
 
 class CompetencySerializer(serializers.ModelSerializer):
+    remove_image = serializers.BooleanField(write_only=True, required=False)
+    remove_pdf_file = serializers.BooleanField(write_only=True, required=False)
+
+    def create(self, validated_data):
+        # These flags only make sense for updates; strip them so the
+        # default model create() doesn't get unknown kwargs.
+        validated_data.pop('remove_image', None)
+        validated_data.pop('remove_pdf_file', None)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        # Handle remove_image/remove_pdf_file flags
+        remove_image = validated_data.pop('remove_image', False)
+        remove_pdf = validated_data.pop('remove_pdf_file', False)
+        if remove_image in [True, 'true', 'True', 1, '1']:
+            if instance.image:
+                instance.image.delete(save=False)
+            validated_data['image'] = None
+        if remove_pdf in [True, 'true', 'True', 1, '1']:
+            if instance.pdf_file:
+                instance.pdf_file.delete(save=False)
+            validated_data['pdf_file'] = None
+        for file_field in ["image", "pdf_file"]:
+            if file_field in validated_data and validated_data[file_field] == "":
+                validated_data[file_field] = None
+        return super().update(instance, validated_data)
+
+    def partial_update(self, instance, validated_data):
+        # Same logic for PATCH/partial_update
+        for file_field in ["image", "pdf_file"]:
+            if file_field in validated_data and validated_data[file_field] == "":
+                validated_data[file_field] = None
+        return super().update(instance, validated_data)
     class Meta:
         model = Competency
         fields = [
@@ -39,6 +72,8 @@ class CompetencySerializer(serializers.ModelSerializer):
             "external_link",
             "created_by",
             "created_at",
+            "remove_image",
+            "remove_pdf_file",
         ]
         read_only_fields = ["created_by", "created_at"]
 
@@ -48,6 +83,10 @@ class CompetencySerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------
 
 class PositionCompetencyRequirementSerializer(serializers.ModelSerializer):
+    def validate_priority_points(self, value):
+        if value is None or value < 1:
+            raise serializers.ValidationError("Priority points must be a positive integer.")
+        return value
     position = PositionSerializer(read_only=True)
     competency = CompetencySerializer(read_only=True)
     branch = BranchSerializer(read_only=True)
@@ -55,6 +94,9 @@ class PositionCompetencyRequirementSerializer(serializers.ModelSerializer):
     position_id = serializers.IntegerField(write_only=True)
     competency_id = serializers.IntegerField(write_only=True)
     branch_id = serializers.IntegerField(write_only=True, required=False)
+
+    requirement_priority_points = serializers.IntegerField(source="priority_points", read_only=True, help_text="Points for this requirement (used for employee progress)")
+    competency_priority_points = serializers.IntegerField(source="competency.priority_points", read_only=True, help_text="Default points for the competency (used for weighting, not employee progress)")
 
     class Meta:
         model = PositionCompetencyRequirement
@@ -64,7 +106,8 @@ class PositionCompetencyRequirementSerializer(serializers.ModelSerializer):
             "competency",
             "branch",
             "frequency",
-            "priority_points",
+            "requirement_priority_points",
+            "competency_priority_points",
             "required",
             "position_id",
             "competency_id",
@@ -121,6 +164,10 @@ class PositionCompetencyRequirementSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------
 
 class EmployeeCompetencyRequirementSerializer(serializers.ModelSerializer):
+    def validate_priority_points(self, value):
+        if value is None or value < 1:
+            raise serializers.ValidationError("Priority points must be a positive integer.")
+        return value
     employee = UserSerializer(read_only=True)
     competency = CompetencySerializer(read_only=True)
     branch = BranchSerializer(read_only=True)
@@ -128,6 +175,9 @@ class EmployeeCompetencyRequirementSerializer(serializers.ModelSerializer):
     employee_id = serializers.IntegerField(write_only=True)
     competency_id = serializers.IntegerField(write_only=True)
     branch_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+
+    requirement_priority_points = serializers.IntegerField(source="priority_points", read_only=True, help_text="Points for this requirement (used for employee progress)")
+    competency_priority_points = serializers.IntegerField(source="competency.priority_points", read_only=True, help_text="Default points for the competency (used for weighting, not employee progress)")
 
     class Meta:
         model = EmployeeCompetencyRequirement
@@ -137,7 +187,8 @@ class EmployeeCompetencyRequirementSerializer(serializers.ModelSerializer):
             "competency",
             "branch",
             "frequency",
-            "priority_points",
+            "requirement_priority_points",
+            "competency_priority_points",
             "required",
             "employee_id",
             "competency_id",
@@ -213,8 +264,32 @@ class QuestionSerializer(serializers.ModelSerializer):
         ]
 
 
+class _CompetencyRelatedField(serializers.PrimaryKeyRelatedField):
+    """Accept a Competency id on write but return the full nested object on read.
+
+    Without this, ExamTemplate.competency was read-only, so managers creating an
+    exam ended up with competency_id=NULL - and the new exam then disappeared
+    from the manager exam list (which filters by competency).
+    """
+
+    def use_pk_only_optimization(self):
+        # Without this, DRF would pass a lightweight PKOnlyObject (only
+        # exposing .pk) into to_representation(), and CompetencySerializer
+        # would crash trying to read title/reference_number/etc.
+        return False
+
+    def to_representation(self, value):
+        if value is None:
+            return None
+        return CompetencySerializer(value).data
+
+
 class ExamTemplateSerializer(serializers.ModelSerializer):
-    competency = CompetencySerializer(read_only=True)
+    competency = _CompetencyRelatedField(
+        queryset=Competency.objects.all(),
+        allow_null=True,
+        required=False,
+    )
     questions = serializers.SerializerMethodField()
 
     class Meta:
@@ -231,15 +306,11 @@ class ExamTemplateSerializer(serializers.ModelSerializer):
             "created_at",
             "questions",
         ]
+        read_only_fields = ["created_by", "created_at"]
 
     def get_questions(self, obj):
         qs = obj.questions.all().order_by('order', 'id')
-        data = QuestionSerializer(qs, many=True).data
-        # DEBUG: Print the serialized questions to the console/log
-        import sys
-        print(f"[DEBUG] Serialized questions for exam {obj.id}: {data}", file=sys.stderr)
-        return data
-        read_only_fields = ["created_by", "created_at"]
+        return QuestionSerializer(qs, many=True).data
 
 
 # ---------------------------------------------------------
@@ -271,32 +342,6 @@ class LevelThresholdSettingSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["updated_at", "id"]
-
-
-# ---------------------------------------------------------
-# QUESTION + CHOICES
-# ---------------------------------------------------------
-
-class QuestionChoiceSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = QuestionChoice
-        fields = ["id", "question", "text", "is_correct"]
-
-
-class QuestionSerializer(serializers.ModelSerializer):
-    choices = QuestionChoiceSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = Question
-        fields = [
-            "id",
-            "exam",
-            "text",
-            "type",
-            "order",
-            "max_points",
-            "choices",
-        ]
 
 
 # ---------------------------------------------------------
@@ -363,8 +408,6 @@ class GradingQueueSessionSerializer(serializers.ModelSerializer):
         ]
 
     def get_branch(self, obj):
-        branch = getattr(getattr(obj.employee, "employee_branch", None), "branch", None)
-        # If employee_branch is a relation, return id/name; else return value
         b = getattr(obj.employee, "employee_branch", None)
         if hasattr(b, "id"):
             return {"id": b.id, "name": getattr(b, "name", "")}
@@ -449,13 +492,23 @@ class ExamSessionStartSerializer(serializers.ModelSerializer):
     def validate_exam_id(self, value):
         request = self.context.get("request")
         user = getattr(request, "user", None)
-        print(f"[DEBUG] validate_exam_id: user={user}, value={value}")
         try:
             exam = ExamTemplate.objects.get(id=value, is_active=True)
-            print(f"[DEBUG] Exam found: {exam}")
         except ExamTemplate.DoesNotExist:
-            print("[DEBUG] ExamTemplate.DoesNotExist")
             raise serializers.ValidationError("Invalid or inactive exam.")
+
+        # Block re-take: if this employee has already submitted or had this
+        # exam graded, refuse to start a new session.
+        if user and user.is_authenticated:
+            already_done = ExamSession.objects.filter(
+                exam=exam,
+                employee=user,
+                status__in=[ExamSession.Status.SUBMITTED, ExamSession.Status.GRADED],
+            ).exists()
+            if already_done:
+                raise serializers.ValidationError(
+                    "You have already submitted this assessment. You cannot retake it."
+                )
 
         # Employees can only start exams posted for their position and branch
         if user and user.is_authenticated and hasattr(user, "is_employee") and user.is_employee():
@@ -465,9 +518,7 @@ class ExamSessionStartSerializer(serializers.ModelSerializer):
                 competency=exam.competency,
                 branch=user.employee_branch,
             ).exists()
-            print(f"[DEBUG] PositionCompetencyRequirement allowed={allowed}")
             if not allowed:
-                print("[DEBUG] Not allowed to take this exam.")
                 raise serializers.ValidationError("You are not allowed to take this exam.")
 
         self._exam = exam
@@ -481,6 +532,20 @@ class ExamSessionStartSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Authentication required.")
         if exam is None:
             raise serializers.ValidationError("Exam not provided or invalid.")
+        # Reuse an open session if one already exists for this (exam, employee)
+        # pair so the employee can resume rather than accumulating duplicates.
+        existing = (
+            ExamSession.objects
+            .filter(exam=exam, employee=user, status=ExamSession.Status.IN_PROGRESS)
+            .order_by('-started_at')
+            .first()
+        )
+        if existing:
+            # Mark any earlier in-progress duplicates as expired (cleanup).
+            ExamSession.objects.filter(
+                exam=exam, employee=user, status=ExamSession.Status.IN_PROGRESS
+            ).exclude(pk=existing.pk).update(status=ExamSession.Status.EXPIRED)
+            return existing
         return ExamSession.objects.create(exam=exam, employee=user)
 
 
@@ -520,35 +585,4 @@ class MyCompetencyRecordSerializer(serializers.ModelSerializer):
         ]
 
     def get_total_points(self, obj):
-        return obj.employee.get_total_points()
-
-    def get_competency_level(self, obj):
-        return obj.employee.get_competency_level()
-
-    def get_next_level_points(self, obj):
-        user = obj.employee
-        total = user.get_total_points()
-
-        # Use global thresholds
-        thresholds = LevelThresholdSetting.get_solo()
-        cl1 = thresholds.cl1_min_points or 0
-        cl2 = thresholds.cl2_min_points or 0
-        cl3 = thresholds.cl3_min_points or 0
-        cl4 = thresholds.cl4_min_points or 0
-
-        if total < cl1:
-            return cl1
-        if total < cl2:
-            return cl2
-        if total < cl3:
-            return cl3
-        if total < cl4:
-            return cl4
-
-        return None  # Already at CL4
-
-    def get_points_needed(self, obj):
-        next_level = self.get_next_level_points(obj)
-        if next_level is None:
-            return 0
-        return max(0, next_level - obj.employee.get_total_points())
+        return obj.employee.g

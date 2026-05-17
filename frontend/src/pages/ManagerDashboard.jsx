@@ -14,6 +14,13 @@ export default function ManagerDashboard() {
       setGradingLoading(true);
       setGradingError('');
       try {
+        // Persist every answer's points to the backend BEFORE asking the
+        // server to compute the final score. Without this step, the final
+        // score is 0 because the answer rows still have points_awarded=NULL.
+        for (const a of gradingAnswers) {
+          const ok = await submitAnswerGrade(a.id, a.points_awarded, a.manager_comment);
+          if (!ok) { setGradingLoading(false); return; }
+        }
         await gradeSession(sessionId);
         setGradingSession(null);
         setGradingAnswers([]);
@@ -47,14 +54,20 @@ export default function ManagerDashboard() {
       setGradingLoading(false);
     }
   };
-  const { user } = useAuth()
+  const { user, setUser } = useAuth()
   const { success, error: toastError } = useToast()
 
   const frequencyOptions = ['ONE_TIME', 'YEARLY', 'NEW_HIRE', 'PROMOTION', 'OTHER']
 
   const toMessage = (val, fallback) => {
     if (!val) return fallback
-    if (typeof val === 'string') return val
+    if (typeof val === 'string') {
+      // Django's debug 500 page is HTML; try to extract the exception line
+      const exMatch = val.match(/<pre class="exception_value">([\s\S]*?)<\/pre>/i)
+      if (exMatch) return exMatch[1].replace(/&#x27;/g, "'").replace(/&quot;/g, '"').trim()
+      if (/<html|<!doctype/i.test(val)) return fallback + ' (server error - check Django console)'
+      return val
+    }
     if (val?.detail) return String(val.detail)
     try { return JSON.stringify(val) } catch { return fallback }
   }
@@ -79,6 +92,8 @@ export default function ManagerDashboard() {
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [expiringSoon, setExpiringSoon] = useState([])
   const [overdue, setOverdue] = useState([])
+  const [levelDeficient, setLevelDeficient] = useState([])
+  const [levelDeficientLoading, setLevelDeficientLoading] = useState(false)
 
   const [publishForm, setPublishForm] = useState({ branch: '', competency: '', positions: [], frequency: '', priority_points: '', required: true })
   const [reqForm, setReqForm] = useState({ branch: '', position: '', competency: '', frequency: '', priority_points: '', required: true })
@@ -86,7 +101,7 @@ export default function ManagerDashboard() {
   const [compForm, setCompForm] = useState({ reference_number: '', title: '', frequency: 'ONE_TIME', priority_points: 0, requires_exam: false, duration: '', competency_area: '', brand: '', external_link: '', description: '', content: '', imageFile: null, pdfFile: null })
   const [assignForm, setAssignForm] = useState({ employee_number: '', branch: '', competency: '', frequency: '', priority_points: '', required: true })
   const [assignEmployee, setAssignEmployee] = useState(null)
-  const [examForm, setExamForm] = useState({ title: '', description: '', competency: '', position: '', time_limit_seconds: '', is_active: true, branches: [] })
+  const [examForm, setExamForm] = useState({ title: '', description: '', competency: '', position: '', time_limit_minutes: '', is_active: true, branches: [] })
   const [promotionForm, setPromotionForm] = useState({ position_id: '' })
 
   const [empForm, setEmpForm] = useState({ employee_number: '', username: '', password: '', position: '', branch: '' })
@@ -97,7 +112,10 @@ export default function ManagerDashboard() {
   const managerBranchIds = useMemo(() => {
     const detail = (user?.manager_branches_detail || []).map((b) => Number(b.id)).filter(Boolean)
     const flat = (user?.manager_branch_ids || []).map((b) => Number(b)).filter(Boolean)
-    return Array.from(new Set([...detail, ...flat]))
+    // Fallback: some manager users only carry employee_branch_id
+    // (e.g. their own working branch), not manager_branches.
+    const own = user?.employee_branch_id ? [Number(user.employee_branch_id)] : []
+    return Array.from(new Set([...detail, ...flat, ...own])).filter(Boolean)
   }, [user])
 
   const managerBranches = useMemo(() => {
@@ -107,7 +125,17 @@ export default function ManagerDashboard() {
 
   useEffect(() => {
     loadAll()
+    // Refresh the cached user from the server so manager_branch_ids /
+    // manager_branches_detail / employee_branch_id reflect the latest
+    // backend state (older sessions may be missing these).
+    api.get('/accounts/me/')
+      .then((res) => { if (res?.data && setUser) setUser(res.data) })
+      .catch(() => {})
+    // setUser is stable from context; safe to omit from deps for one-shot fetch
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => { fetchLevelDeficient() }, [])
 
   const loadAll = async () => {
     setLoading(true)
@@ -136,6 +164,18 @@ export default function ManagerDashboard() {
       toastError('Failed to load manager data')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchLevelDeficient = async () => {
+    setLevelDeficientLoading(true)
+    try {
+      const res = await api.get('/training/reports/level-deficient/')
+      setLevelDeficient(res.data?.results || [])
+    } catch (e) {
+      toastError(toMessage(e?.response?.data, 'Failed to load level-deficient list'))
+    } finally {
+      setLevelDeficientLoading(false)
     }
   }
 
@@ -210,14 +250,32 @@ export default function ManagerDashboard() {
   const createCompetency = async (e) => {
     e.preventDefault()
     setError('')
+
+    // Required-field validation up front so we can show a clear message.
+    const ref = (compForm.reference_number || '').trim()
+    const title = (compForm.title || '').trim()
+    if (!ref) {
+      const msg = 'Reference number is required'
+      setError(msg); toastError(msg); return
+    }
+    if (!title) {
+      const msg = 'Title is required'
+      setError(msg); toastError(msg); return
+    }
+    const points = Number(compForm.priority_points || 0)
+    if (!Number.isFinite(points) || points < 0) {
+      const msg = 'Priority points must be a non-negative number'
+      setError(msg); toastError(msg); return
+    }
+
     try {
       const fd = new FormData()
       const entries = {
-        reference_number: compForm.reference_number,
-        title: compForm.title,
-        frequency: compForm.frequency,
-        priority_points: Number(compForm.priority_points || 0),
-        requires_exam: compForm.requires_exam,
+        reference_number: ref,
+        title: title,
+        frequency: compForm.frequency || 'ONE_TIME',
+        priority_points: points,
+        requires_exam: !!compForm.requires_exam,
         duration: compForm.duration || '',
         competency_area: compForm.competency_area || '',
         brand: compForm.brand || '',
@@ -226,7 +284,9 @@ export default function ManagerDashboard() {
         content: compForm.content || '',
       }
       Object.entries(entries).forEach(([k, v]) => {
-        if (v !== '' && v !== null && v !== undefined) fd.append(k, v)
+        // FormData -> serialize booleans/numbers as strings; skip empty
+        if (v === '' || v === null || v === undefined) return
+        fd.append(k, typeof v === 'boolean' ? (v ? 'true' : 'false') : v)
       })
       if (compForm.imageFile) fd.append('image', compForm.imageFile)
       if (compForm.pdfFile) fd.append('pdf_file', compForm.pdfFile)
@@ -236,8 +296,10 @@ export default function ManagerDashboard() {
       setCompForm({ reference_number: '', title: '', frequency: 'ONE_TIME', priority_points: 0, requires_exam: false, duration: '', competency_area: '', brand: '', external_link: '', description: '', content: '', imageFile: null, pdfFile: null })
       loadAll()
     } catch (e) {
-      setError(toMessage(e?.response?.data, 'Failed to create competency'))
-      toastError('Failed to create competency')
+      // Surface the real backend reason (e.g. duplicate reference_number)
+      const msg = toMessage(e?.response?.data, 'Failed to create competency')
+      setError(msg)
+      toastError(msg)
     }
   }
 
@@ -281,13 +343,13 @@ export default function ManagerDashboard() {
         description: examForm.description || undefined,
         competency: examForm.competency ? Number(examForm.competency) : null,
         position: examForm.position ? Number(examForm.position) : null,
-        time_limit_seconds: examForm.time_limit_seconds ? Number(examForm.time_limit_seconds) : null,
+        time_limit_seconds: examForm.time_limit_minutes ? Math.max(1, Math.round(Number(examForm.time_limit_minutes) * 60)) : null,
         is_active: examForm.is_active,
         branch_ids: (examForm.branches || []).filter(Boolean).map(Number),
       }
       await api.post('/training/exams/', payload)
       success('Exam created')
-      setExamForm({ title: '', description: '', competency: '', position: '', time_limit_seconds: '', is_active: true, branches: [] })
+      setExamForm({ title: '', description: '', competency: '', position: '', time_limit_minutes: '', is_active: true, branches: [] })
       loadAll()
     } catch (e) {
       setError(toMessage(e?.response?.data, 'Failed to create exam'))
@@ -338,22 +400,68 @@ export default function ManagerDashboard() {
   const addEmployee = async (e) => {
     e.preventDefault()
     setError('')
+
+    // If the manager has exactly one branch, use it automatically.
+    // Otherwise require an explicit pick from the dropdown.
+    const resolvedBranchId =
+      empForm.branch
+        ? Number(empForm.branch)
+        : (managerBranches.length === 1 ? Number(managerBranches[0].id) : null)
+
+    const employeeNumber = (empForm.employee_number || '').trim()
+    if (!employeeNumber) {
+      const msg = 'Employee number is required'
+      setError(msg); toastError(msg); return
+    }
+    if (!resolvedBranchId) {
+      const msg = 'Please select a branch'
+      setError(msg); toastError(msg); return
+    }
+    if (!empForm.position) {
+      const msg = 'Please select a position'
+      setError(msg); toastError(msg); return
+    }
+
     try {
       const payload = {
-        username: empForm.username || empForm.employee_number,
-        password: empForm.password || empForm.employee_number,
-        employee_number: empForm.employee_number,
-        position: empForm.position ? Number(empForm.position) : null,
-        employee_branch: empForm.branch ? Number(empForm.branch) : null,
+        username: (empForm.username || '').trim() || employeeNumber,
+        password: empForm.password || employeeNumber,
+        employee_number: employeeNumber,
+        position: Number(empForm.position),
+        employee_branch: resolvedBranchId,
       }
       await api.post('/register/employee/', payload)
       success('Employee created')
       setEmpForm({ employee_number: '', username: '', password: '', position: '', branch: '' })
     } catch (e) {
-      setError(toMessage(e?.response?.data, 'Failed to create employee'))
-      toastError('Failed to create employee')
+      // Surface the real backend error (duplicate employee number, etc.)
+      const msg = toMessage(e?.response?.data, 'Failed to create employee')
+      setError(msg)
+      toastError(msg)
     }
   }
+
+  const submitAnswerGrade = async (answerId, points, comment) => {
+    // Persist a single answer's grade to the backend. Used by the per-row
+    // "Save" button in the grading modal, AND batched by finalizeSessionGrade.
+    if (points === '' || points === null || points === undefined) {
+      toastError('Please enter points before saving');
+      return false;
+    }
+    try {
+      await api.post('/training/exam/answer/grade/', {
+        answer_id: answerId,
+        points_awarded: Number(points),
+        manager_comment: comment || '',
+      });
+      return true;
+    } catch (e) {
+      const msg = toMessage(e?.response?.data, 'Failed to save grade');
+      setGradingError(msg);
+      toastError(msg);
+      return false;
+    }
+  };
 
   const gradeSession = async (sessionId, status) => {
     try {
@@ -424,12 +532,18 @@ export default function ManagerDashboard() {
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
-          <select value={empForm.branch} onChange={(e) => setEmpForm((f) => ({ ...f, branch: e.target.value }))}>
-            <option value="">Select branch</option>
-            {managerBranches.map((b) => (
-              <option key={b.id} value={b.id}>{b.name}</option>
-            ))}
-          </select>
+          {managerBranches.length > 1 ? (
+            <select value={empForm.branch} onChange={(e) => setEmpForm((f) => ({ ...f, branch: e.target.value }))}>
+              <option value="">Select branch</option>
+              {managerBranches.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          ) : (
+            <span className="pill" title="Employee will be added to your branch">
+              Branch: {managerBranches[0]?.name || '-'}
+            </span>
+          )}
         </div>
         <button className="btn primary">Create</button>
       </form>
@@ -593,7 +707,7 @@ export default function ManagerDashboard() {
       <form className="card" onSubmit={createExam} style={{ marginBottom: 12 }}>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
           <input placeholder="Title" value={examForm.title} onChange={(e) => setExamForm((f) => ({ ...f, title: e.target.value }))} />
-          <input placeholder="Time limit (seconds)" type="number" value={examForm.time_limit_seconds} onChange={(e) => setExamForm((f) => ({ ...f, time_limit_seconds: e.target.value }))} />
+          <input placeholder="Time limit (minutes)" type="number" min="1" value={examForm.time_limit_minutes} onChange={(e) => setExamForm((f) => ({ ...f, time_limit_minutes: e.target.value }))} />
           <label className="row" style={{ gap: 6, alignItems: 'center' }}>
             <input type="checkbox" checked={examForm.is_active} onChange={(e) => setExamForm((f) => ({ ...f, is_active: e.target.checked }))} />
             <span>Active</span>
@@ -605,17 +719,10 @@ export default function ManagerDashboard() {
             {competencies.map((c) => <option key={c.id} value={c.id}>{c.reference_number} - {c.title}</option>)}
           </select>
           <select value={examForm.position} onChange={(e) => setExamForm((f) => ({ ...f, position: e.target.value }))}>
-            <option value="">Select position</option>
-            {positions
-              .filter((p) => {
-                if (!examForm.competency) return true;
-                return requirements.some(
-                  (r) => String(r.position) === String(p.id) || String(r.position?.id) === String(p.id)
-                    ? String(r.competency) === String(examForm.competency) || String(r.competency?.id) === String(examForm.competency)
-                    : false
-                );
-              })
-              .map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            <option value="">Select position (optional)</option>
+            {/* Position is informational metadata on the exam template -
+                no need to gate it on having a published requirement yet. */}
+            {positions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <select multiple value={examForm.branches} onChange={e => setExamForm(f => ({ ...f, branches: Array.from(e.target.selectedOptions).map(o => o.value) }))}>
             <option value="" disabled>Select branches</option>
@@ -845,7 +952,7 @@ export default function ManagerDashboard() {
               </div>
             </div>
             <div style={{marginBottom:10}}><b>Employee Number:</b> {assignEmployee.employee_number || '-'}</div>
-            <div style={{marginBottom:10}}><b>Branch:</b> {assignEmployee.employee_branch || '-'}</div>
+            <div style={{marginBottom:10}}><b>Branch:</b> {assignEmployee.employee_branch?.name || '-'}</div>
             <div style={{marginBottom:10}}><b>Role:</b> {assignEmployee.role || '-'}</div>
             <div style={{marginBottom:10}}><b>Competency Level:</b> {assignEmployee.current_competency_level || '-'}</div>
             <div style={{marginBottom:10}}><b>Total Points:</b> {assignEmployee.total_competency_points || '-'}</div>
@@ -918,6 +1025,49 @@ export default function ManagerDashboard() {
     </div>
   )
 
+  const LevelDeficientTab = (
+    <div className="card">
+      <div className="toolbar" style={{ marginBottom: 12 }}>
+        <div className="left"><h3 style={{margin:0}}>Below Required Level</h3></div>
+        <div className="right">
+          <button className="btn" onClick={fetchLevelDeficient} disabled={levelDeficientLoading}>
+            {levelDeficientLoading ? 'Loading…' : 'Refresh'}
+          </button>
+        </div>
+      </div>
+      <div style={{fontSize:13, color:'#9bb0e0', marginBottom:10}}>
+        Employees whose current competency level is below the minimum required by their position.
+      </div>
+      <div className="scroll-x">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Employee</th><th>Emp #</th><th>Position</th><th>Branch</th>
+              <th>Current</th><th>Required</th><th>Points</th><th>Need</th><th>Short by</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(levelDeficient || []).length === 0 ? (
+              <tr><td colSpan={9} style={{opacity:0.7}}>No deficiencies. Everyone meets their required level.</td></tr>
+            ) : levelDeficient.map((r) => (
+              <tr key={r.employee_id} onClick={() => navigate(`/manager/user/${r.employee_id}`)} style={{cursor:'pointer'}}>
+                <td>{r.username}</td>
+                <td>{r.employee_number || '-'}</td>
+                <td>{r.position || '-'}</td>
+                <td>{r.branch || '-'}</td>
+                <td style={{color:'#ffb4b4', fontWeight:700}}>{r.current_level}</td>
+                <td style={{color:'#7be1a1', fontWeight:700}}>{r.required_level}</td>
+                <td>{r.total_points}</td>
+                <td>{r.required_points}</td>
+                <td style={{fontWeight:700}}>{r.points_short}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+
   const tabs = [
     { key: 'add-employee', label: 'Add Employee', content: AddEmployeeTab },
     { key: 'employee-lookup', label: 'Employee Lookup', content: LookupTab },
@@ -926,6 +1076,7 @@ export default function ManagerDashboard() {
     { key: 'exams', label: 'Exams', content: ExamsTab },
     { key: 'sessions', label: 'Sessions', content: SessionsTab },
     { key: 'grading-queue', label: 'Grading Queue', content: GradingQueueTab },
+    { key: 'level-deficient', label: 'Below Required Level', content: LevelDeficientTab },
   ]
 
   return (

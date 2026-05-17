@@ -33,8 +33,7 @@ export default function EmployeeExamQuestions() {
       <h1 className="mb-3 text-center text-primary fw-bold">Exam Questions</h1>
       {exam && <h2 className="mb-4 text-center">{exam.title}</h2>}
       {loading && <div className="card">Loading…</div>}
-      {error && <div className="alert alert-danger">{String(error)}</div>}
-      <div className="scroll-x">
+       <div className="scroll-x">
         <table className="table">
           <thead><tr><th>Order</th><th>Text</th><th>Type</th><th>Max Points</th><th>Choices</th></tr></thead>
           <tbody>

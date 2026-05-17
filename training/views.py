@@ -89,7 +89,7 @@ class PositionCompetencyRequirementCreateView(generics.CreateAPIView):
         user = self.request.user
         branch = None
         if user.is_manager():
-            branches = list(user.manager_branches.all())
+            branches = list(user.managed_branches_qs())
             branch_id = serializer.validated_data.get("branch_id")
             if len(branches) == 1 and not branch_id:
                 branch = branches[0]
@@ -110,7 +110,7 @@ class PositionCompetencyRequirementListView(generics.ListAPIView):
         # Managers: restrict to their branches
 
         if user.is_manager():
-            qs = qs.filter(branch__in=user.manager_branches.all())
+            qs = qs.filter(branch__in=user.managed_branches_qs())
         # Filters
         branch_id = self.request.query_params.get("branch")
         position_id = self.request.query_params.get("position")
@@ -132,7 +132,7 @@ class PositionCompetencyRequirementDetailView(generics.RetrieveUpdateDestroyAPIV
         qs = PositionCompetencyRequirement.objects.all()
         user = self.request.user
         if user.is_manager():
-            qs = qs.filter(branch__in=user.manager_branches.all())
+            qs = qs.filter(branch__in=user.managed_branches_qs())
         return qs
 
 
@@ -150,7 +150,7 @@ class EmployeeRequirementView(APIView):
         qs = EmployeeCompetencyRequirement.objects.filter(employee_id=employee_id).select_related("competency", "branch", "employee")
         user = request.user
         if user.is_manager():
-            qs = qs.filter(branch__in=user.manager_branches.all())
+            qs = qs.filter(branch__in=user.managed_branches_qs())
         data = EmployeeCompetencyRequirementSerializer(qs, many=True).data
         return Response({"results": data})
 
@@ -197,7 +197,7 @@ class EmployeeRequirementView(APIView):
         def assert_branch_allowed(target_branch):
             if not user.is_manager():
                 return
-            allowed_ids = set(user.manager_branches.values_list("id", flat=True))
+            allowed_ids = user.managed_branch_ids()
             if not allowed_ids:
                 raise permissions.PermissionDenied("No manager branches configured")
             if target_branch is None:
@@ -325,8 +325,8 @@ class ExpiringCompetenciesView(APIView):
 
         req_qs = PositionCompetencyRequirement.objects.filter(required=True)
         if user.is_manager():
-            req_qs = req_qs.filter(branch__in=user.manager_branches.all())
-            if branch_id and branch_id not in set(user.manager_branches.values_list("id", flat=True)):
+            req_qs = req_qs.filter(branch__in=user.managed_branches_qs())
+            if branch_id and branch_id not in user.managed_branch_ids():
                 return Response({"error": "Not allowed to view other branches"}, status=403)
         if branch_id:
             req_qs = req_qs.filter(branch_id=branch_id)
@@ -335,7 +335,7 @@ class ExpiringCompetenciesView(APIView):
 
         emp_qs = User.objects.filter(role=User.Roles.EMPLOYEE)
         if user.is_manager():
-            emp_qs = emp_qs.filter(employee_branch__in=user.manager_branches.all())
+            emp_qs = emp_qs.filter(employee_branch__in=user.managed_branches_qs())
         if branch_id:
             emp_qs = emp_qs.filter(employee_branch_id=branch_id)
         if position_id:
@@ -395,7 +395,7 @@ class ExpiringCompetenciesView(APIView):
 
         employee = get_object_or_404(User, id=emp_id)
         if user.is_manager():
-            allowed = set(user.manager_branches.values_list("id", flat=True))
+            allowed = user.managed_branch_ids()
             if employee.employee_branch_id and employee.employee_branch_id not in allowed:
                 return Response({"error": "Not allowed to modify other branches"}, status=403)
 
@@ -503,17 +503,24 @@ class ExamTemplateListView(generics.ListAPIView):
                 qs = qs.filter(competency_id=competency_param)
             if user.is_manager():
                 from training.models import PositionCompetencyRequirement
+                from django.db.models import Q
+                # Manager's allowed branches = manager_branches M2M ∪ employee_branch
+                allowed_branch_ids = user.managed_branch_ids()
+                if getattr(user, 'employee_branch_id', None):
+                    allowed_branch_ids.add(user.employee_branch_id)
+                req_filter_branches = [branch_param] if branch_param else list(allowed_branch_ids)
                 allowed = PositionCompetencyRequirement.objects.filter(
-                    branch__in=user.manager_branches.all() if not branch_param else [branch_param]
+                    branch_id__in=req_filter_branches
                 )
                 if position_param:
                     allowed = allowed.filter(position_id=position_param)
                 allowed_competency_ids = list(allowed.values_list("competency_id", flat=True))
-                logger.info(f"Manager allowed branches: {[b.id for b in user.manager_branches.all()]}")
-                logger.info(f"Allowed PositionCompetencyRequirement count: {allowed.count()}")
-                logger.info(f"Allowed competency_ids: {allowed_competency_ids}")
-                qs = qs.filter(competency_id__in=allowed_competency_ids)
-            logger.info(f"Returning queryset count: {qs.count()}")
+                # A manager sees exams whose competency is in their published
+                # requirements OR exams they created themselves - otherwise a
+                # brand-new exam disappears until a requirement is published.
+                qs = qs.filter(
+                    Q(competency_id__in=allowed_competency_ids) | Q(created_by=user)
+                ).distinct()
             return qs
 
         # Employees: only exams for their position/branch via requirements
@@ -596,7 +603,7 @@ class ManagerExamSessionsView(generics.ListAPIView):
         if user.is_admin():
             pass
         elif user.is_manager():
-            qs = qs.filter(employee__employee_branch__in=user.manager_branches.all())
+            qs = qs.filter(employee__employee_branch__in=user.managed_branches_qs())
         else:
             return ExamSession.objects.none()
 
@@ -628,9 +635,10 @@ class ManagerExamSessionDetailView(APIView):
         if user.is_admin():
             session = get_object_or_404(base_qs, pk=pk)
         elif user.is_manager():
-            session = get_object_or_404(base_qs.filter(employee__employee_branch__in=user.manager_branches.all()), pk=pk)
+            session = get_object_or_404(base_qs.filter(employee__employee_branch__in=user.managed_branches_qs()), pk=pk)
         else:
-            return Response({"error": "Not allowed"}, status=403)
+            # Employees can view their own session detail (review page).
+            session = get_object_or_404(base_qs.filter(employee=user), pk=pk)
 
         data = ExamSessionDetailSerializer(session).data
         return Response(data)
@@ -651,7 +659,7 @@ class ManagerGradingQueueView(APIView):
         ).prefetch_related("answers__question", "answers__selected_choices")
 
         if user.is_manager():
-            base_qs = base_qs.filter(employee__employee_branch__in=user.manager_branches.all())
+            base_qs = base_qs.filter(employee__employee_branch__in=user.managed_branches_qs())
 
         sessions = list(base_qs)
 
@@ -739,12 +747,21 @@ class SubmitExamView(APIView):
                 ans.save()
                 total_score += float(auto_points)
 
-        # Update session state; if expired, mark accordingly
+        # Always SUBMITTED on submit (even if time was up). The EXPIRED
+        # status is reserved for duplicate-session cleanup, and we now
+        # hide EXPIRED rows from the employee/manager history views.
         session.score = total_score
         session.max_score = max_score
-        session.status = ExamSession.Status.EXPIRED if expired else ExamSession.Status.SUBMITTED
+        session.status = ExamSession.Status.SUBMITTED
         session.submitted_at = timezone.now()
         session.save()
+
+        # Clean up any other open sessions for the same (exam, employee)
+        # so the history only shows this real submission.
+        ExamSession.objects.filter(
+            exam=exam, employee=employee,
+            status=ExamSession.Status.IN_PROGRESS,
+        ).exclude(pk=session.pk).update(status=ExamSession.Status.EXPIRED)
 
         # Increment attempts on record for tracking
         record, _ = EmployeeCompetencyRecord.objects.get_or_create(
@@ -780,7 +797,7 @@ class GradeExamView(APIView):
         user = request.user
         if user.is_manager():
             employee_branch = getattr(session.employee, "employee_branch", None)
-            if not employee_branch or employee_branch not in user.manager_branches.all():
+            if not employee_branch or employee_branch not in user.managed_branches_qs():
                 return Response({"error": "Not allowed to grade this session"}, status=403)
 
         if session.status not in [ExamSession.Status.SUBMITTED, ExamSession.Status.GRADED]:
@@ -825,6 +842,31 @@ class GradeExamView(APIView):
             record.points_earned = record.points_earned or 0
         record.save()
 
+        # ----- Notify the employee that their exam was graded -----
+        try:
+            from accounts.models import Notification
+            score = float(session.score or 0)
+            max_score = float(session.max_score or 0)
+            pct_int = int(round(pct))
+            verdict = "PASSED" if passed else "FAILED"
+            kind = (
+                Notification.Kind.EXAM_PASSED if passed
+                else Notification.Kind.EXAM_FAILED
+            )
+            Notification.objects.create(
+                user=employee,
+                kind=kind,
+                title=f"Your exam was graded - {verdict}",
+                body=(
+                    f"'{exam.title}' was graded by your manager. "
+                    f"Score: {score:g} / {max_score:g} ({pct_int}%)."
+                ),
+                link=f"/exam/review/{session.id}",
+            )
+        except Exception:
+            # Notifications are best-effort - never block a successful grade.
+            pass
+
         return Response({
             "message": "Exam graded successfully",
             "final_score": float(session.score or 0),
@@ -854,7 +896,7 @@ class GradeAnswerView(APIView):
         user = request.user
         if user.is_manager():
             employee_branch = getattr(ans.session.employee, "employee_branch", None)
-            if not employee_branch or employee_branch not in user.manager_branches.all():
+            if not employee_branch or employee_branch not in user.managed_branches_qs():
                 return Response({"error": "Not allowed to grade this answer"}, status=403)
 
         ans.points_awarded = float(points)
@@ -878,7 +920,7 @@ class CompetencyRecordListView(generics.ListAPIView):
         if user.is_admin():
             pass
         elif user.is_manager():
-            qs = qs.filter(employee__employee_branch__in=user.manager_branches.all())
+            qs = qs.filter(employee__employee_branch__in=user.managed_branches_qs())
         else:
             qs = qs.filter(employee=user)
 
@@ -932,7 +974,7 @@ class PublishRequirementsView(APIView):
         required = data.get("required")
 
         user = request.user
-        if user.is_manager() and not user.manager_branches.filter(id=branch_id).exists():
+        if user.is_manager() and not branch_id in user.managed_branch_ids():
             return Response({"error": "Not allowed to publish to this branch"}, status=403)
 
         created = 0
@@ -994,7 +1036,7 @@ class DashboardSummaryView(APIView):
         if user.is_admin() or user.is_manager():
             scope_filter = {}
             if user.is_manager():
-                scope_filter = {"employee__employee_branch__in": user.manager_branches.all()}
+                scope_filter = {"employee__employee_branch__in": user.managed_branches_qs()}
             sessions_qs = ExamSession.objects.filter(**scope_filter)
             records_qs = EmployeeCompetencyRecord.objects.filter(**scope_filter)
             resp = {
@@ -1036,7 +1078,7 @@ class NonComplianceReportView(APIView):
         # Required mappings in scope
         req_qs = PositionCompetencyRequirement.objects.filter(required=True)
         if user.is_manager():
-            req_qs = req_qs.filter(branch__in=user.manager_branches.all())
+            req_qs = req_qs.filter(branch__in=user.managed_branches_qs())
         if branch_id:
             req_qs = req_qs.filter(branch_id=branch_id)
         if position_id:
@@ -1045,7 +1087,7 @@ class NonComplianceReportView(APIView):
         # Employees in scope
         emp_qs = User.objects.filter(role=User.Roles.EMPLOYEE)
         if user.is_manager():
-            emp_qs = emp_qs.filter(employee_branch__in=user.manager_branches.all())
+            emp_qs = emp_qs.filter(employee_branch__in=user.managed_branches_qs())
         if branch_id:
             emp_qs = emp_qs.filter(employee_branch_id=branch_id)
         if position_id:
@@ -1134,7 +1176,7 @@ class EmployeeActivityView(APIView):
 
         # Managers may only view employees within their branches
         if user.is_manager():
-            if not employee.employee_branch or employee.employee_branch not in user.manager_branches.all():
+            if not employee.employee_branch or employee.employee_branch not in user.managed_branches_qs():
                 return Response({"error": "Not allowed to view this employee"}, status=403)
 
         # Totals & level
@@ -1228,3 +1270,90 @@ class LevelThresholdsView(APIView):
 
         serializer.save()
         return Response(serializer.data)
+
+# ---------------------------------------------------------
+# EMPLOYEE DASHBOARD (READ-ONLY API)
+# ---------------------------------------------------------
+
+class EmployeeDashboardAPIView(APIView):
+    """Lightweight feed of the employee's assigned competencies + active exam."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        position_id = getattr(user, 'position_id', None)
+        branch_id = getattr(user, 'employee_branch_id', None)
+        reqs = PositionCompetencyRequirement.objects.filter(
+            position_id=position_id,
+            branch_id=branch_id,
+        ).select_related('competency')
+
+        data = []
+        for r in reqs:
+            comp = r.competency
+            if not comp:
+                continue
+            exam = ExamTemplate.objects.filter(competency=comp, is_active=True).first()
+            data.append({
+                'competency': CompetencySerializer(comp).data,
+                'exam': ExamTemplateSerializer(exam).data if exam else None,
+            })
+        return Response(data)
+
+# ---------------------------------------------------------
+# LEVEL-DEFICIENT REPORT (employees below their position's min_required_level)
+# ---------------------------------------------------------
+
+class LevelDeficientReportView(APIView):
+    """
+    List employees whose current competency level is below the level required
+    by their position (Position.min_required_level).
+
+    Returns each as { employee_id, username, employee_number, position, branch,
+    current_level, required_level, total_points, required_points, points_short }.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if not (user.is_admin() or user.is_manager()):
+            return Response({'error': 'Not allowed'}, status=403)
+
+        branch_id = request.query_params.get('branch')
+        position_id = request.query_params.get('position')
+
+        emp_qs = User.objects.filter(role=User.Roles.EMPLOYEE).select_related('position', 'employee_branch')
+        if user.is_manager():
+            emp_qs = emp_qs.filter(employee_branch__in=user.managed_branches_qs())
+        if branch_id:
+            emp_qs = emp_qs.filter(employee_branch_id=branch_id)
+        if position_id:
+            emp_qs = emp_qs.filter(position_id=position_id)
+
+        rank = {'CL0': 0, 'CL1': 1, 'CL2': 2, 'CL3': 3, 'CL4': 4}
+        results = []
+        for emp in emp_qs:
+            pos = emp.position
+            if not pos or not pos.min_required_level:
+                continue
+            current_level = emp.get_competency_level()
+            if rank.get(current_level, 0) >= rank.get(pos.min_required_level, 0):
+                continue  # already meets the bar
+            thresholds = emp.get_competency_level_thresholds()
+            total = emp.get_total_points()
+            required_pts = thresholds.get(pos.min_required_level, 0)
+            results.append({
+                'employee_id': emp.id,
+                'username': emp.username,
+                'employee_number': emp.employee_number,
+                'position': pos.name,
+                'branch': emp.employee_branch.name if emp.employee_branch else None,
+                'current_level': current_level,
+                'required_level': pos.min_required_level,
+                'total_points': total,
+                'required_points': required_pts,
+                'points_short': max(0, required_pts - total),
+            })
+        # Most deficient first
+        results.sort(key=lambda r: -r['points_short'])
+        return Response({'results': results, 'count': len(results)})

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from accounts.models import User, Position
+from accounts.models import User, Position, Notification
 from branches.models import Branch
 from django.contrib.auth import authenticate
 
@@ -29,7 +29,17 @@ class PositionSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     position = PositionSerializer(read_only=True)
-    employee_branch = serializers.StringRelatedField()
+    employee_branch = serializers.SerializerMethodField(method_name='get_employee_branch_detail')
+
+    def get_employee_branch_detail(self, obj):
+        branch = getattr(obj, 'employee_branch', None)
+        if branch:
+            return {
+                'id': branch.id,
+                'name': branch.name,
+                'location': getattr(branch, 'location', '')
+            }
+        return None
     manager_branches = serializers.StringRelatedField(many=True)
     profile_picture = serializers.ImageField(read_only=True)
     # Extras for frontend mapping
@@ -38,6 +48,8 @@ class UserSerializer(serializers.ModelSerializer):
     manager_branches_detail = serializers.SerializerMethodField(method_name='get_manager_branches_detail')
     current_competency_level = serializers.SerializerMethodField()
     total_competency_points = serializers.SerializerMethodField()
+    competency_level_thresholds = serializers.SerializerMethodField()
+    min_required_level = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -54,6 +66,8 @@ class UserSerializer(serializers.ModelSerializer):
             "manager_branches_detail",
             "current_competency_level",
             "total_competency_points",
+            "competency_level_thresholds",
+            "min_required_level",
             "profile_picture",
         ]
 
@@ -62,6 +76,16 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_total_competency_points(self, obj):
         return obj.get_total_points()
+
+    def get_competency_level_thresholds(self, obj):
+        # Active CL1-4 thresholds (per-position or global)
+        try:
+            return obj.get_competency_level_thresholds()
+        except Exception:
+            return None
+
+    def get_min_required_level(self, obj):
+        return getattr(getattr(obj, 'position', None), 'min_required_level', None)
 
     def get_employee_branch_id(self, obj):
         try:
@@ -161,14 +185,14 @@ class CustomLoginSerializer(serializers.Serializer):
         employee_number = attrs.get("employee_number")
         password = attrs.get("password")
 
-        # Admin login → username required
+        # Admin login -> username required
         if username:
             user = authenticate(username=username, password=password)
             if not user:
                 raise serializers.ValidationError("Invalid username or password")
             return {"user": user}
 
-        # Employee/Manager login → employee_number required
+        # Employee/Manager login -> employee_number required
         if employee_number:
             try:
                 user_obj = User.objects.get(employee_number=employee_number)
@@ -178,8 +202,16 @@ class CustomLoginSerializer(serializers.Serializer):
             user = authenticate(username=user_obj.username, password=password)
             if not user:
                 raise serializers.ValidationError("Invalid employee number or password")
-
             return {"user": user}
 
         raise serializers.ValidationError("Provide either username or employee_number")
 
+# ---------------------------------------------------------
+# NOTIFICATION SERIALIZER
+# ---------------------------------------------------------
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = ['id', 'kind', 'title', 'body', 'link', 'is_read', 'created_at']
+        read_only_fields = ['id', 'kind', 'title', 'body', 'link', 'created_at']

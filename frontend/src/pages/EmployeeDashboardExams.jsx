@@ -43,11 +43,28 @@ export default function EmployeeDashboardExams() {
               <div style={{fontWeight: 600, fontSize: 18, color: '#1976d2', marginBottom: 6}}>{exam.title}</div>
               <div style={{color: '#444', fontSize: 15, marginBottom: 8}}>{exam.description || 'No description'}</div>
               <div style={{color: '#888', fontSize: 13, marginBottom: 8}}>Time Limit: {exam.time_limit_seconds ? (exam.time_limit_seconds/60)+" min" : 'N/A'}</div>
-              {submitted ? (
-                <button style={{marginTop: 'auto', background: '#e0e0e0', color: '#888', border: 'none', borderRadius: 8, padding: '8px 18px', fontWeight: 600, cursor: 'not-allowed'}} disabled>Already Submitted</button>
-              ) : (
-                <button style={{marginTop: 'auto', background: '#1976d2', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontWeight: 600, cursor: 'pointer'}} onClick={() => navigate(`/assessment/${exam.id}`)}>Start Assessment</button>
-              )}
+              <button
+                style={{
+                  marginTop: 'auto',
+                  background: submitted ? '#e0e0e0' : '#1976d2',
+                  color: submitted ? '#888' : '#fff',
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: '8px 18px',
+                  fontWeight: 600,
+                  cursor: submitted ? 'not-allowed' : 'pointer'
+                }}
+                onClick={() => {
+                  if (submitted) {
+                    window.alert('You have already submitted this assessment.');
+                  } else {
+                    navigate(`/assessment/${exam.id}`);
+                  }
+                }}
+                disabled={false}
+              >
+                {submitted ? 'Open Assessment' : 'Start Assessment'}
+              </button>
             </div>
           );
         })}

@@ -13,6 +13,7 @@ export default function AdminReports() {
   const [filters, setFilters] = useState({ branch: '', position: '' })
   const [nonCompliance, setNonCompliance] = useState(null)
   const [sessions, setSessions] = useState([])
+  const [levelDeficient, setLevelDeficient] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -31,13 +32,15 @@ export default function AdminReports() {
       if (filters.branch) q.append('branch', filters.branch)
       if (filters.position) q.append('position', filters.position)
 
-      const [ncRes, sessRes] = await Promise.all([
+      const [ncRes, sessRes, ldRes] = await Promise.all([
         api.get(`/training/compliance/missing/?${q.toString()}`),
         api.get(`/training/exam/sessions/manage/${filters.branch ? `?branch=${filters.branch}` : ''}`),
+        api.get(`/training/reports/level-deficient/?${q.toString()}`),
       ])
       setNonCompliance(ncRes.data)
       const sessData = sessRes.data
       setSessions(Array.isArray(sessData) ? sessData : (sessData?.results || []))
+      setLevelDeficient(ldRes.data)
     } catch (e) {
       setError(e?.response?.data || 'Failed to load reports')
     } finally {
@@ -144,6 +147,40 @@ export default function AdminReports() {
                   }</td>
                   <td>{r.below_min_level ? 'Yes' : 'No'}</td>
                   <td>{(r.missing_competencies || []).map((m) => m.title).join(', ')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {levelDeficient && (
+        <div className="card">
+          <div className="row" style={{justifyContent:'space-between'}}>
+            <h3>Below Required Level</h3>
+            <span className="pill">{levelDeficient.count || 0} employees</span>
+          </div>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Employee</th><th>Emp #</th><th>Position</th><th>Branch</th>
+                <th>Current</th><th>Required</th><th>Points</th><th>Need</th><th>Short by</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(levelDeficient.results || []).length === 0 ? (
+                <tr><td colSpan={9} style={{opacity:0.7}}>Everyone meets their required level.</td></tr>
+              ) : (levelDeficient.results || []).map((r) => (
+                <tr key={r.employee_id}>
+                  <td>{r.username}</td>
+                  <td>{r.employee_number || '-'}</td>
+                  <td>{r.position || '-'}</td>
+                  <td>{r.branch || '-'}</td>
+                  <td style={{color:'#ef4444', fontWeight:700}}>{r.current_level}</td>
+                  <td style={{color:'#19c37d', fontWeight:700}}>{r.required_level}</td>
+                  <td>{r.total_points}</td>
+                  <td>{r.required_points}</td>
+                  <td style={{fontWeight:700}}>{r.points_short}</td>
                 </tr>
               ))}
             </tbody>

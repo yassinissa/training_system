@@ -8,6 +8,7 @@ import EmployeeDashboardExams from "./EmployeeDashboardExams.jsx";
 
 const ExamsSection = EmployeeDashboardExams;
 const ResultsSection = () => {
+  const navigate = useNavigate();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -50,11 +51,12 @@ const ResultsSection = () => {
                 <th style={{padding: '14px', minWidth: 160, textAlign: 'left', border: 'none'}}>Competency</th>
                 <th style={{padding: '14px', minWidth: 160, textAlign: 'center', border: 'none'}}>Started At</th>
                 <th style={{padding: '14px', minWidth: 160, textAlign: 'center', border: 'none'}}>Submitted At</th>
+                <th style={{padding: '14px', minWidth: 100, textAlign: 'center', border: 'none'}}>Review</th>
               </tr>
             </thead>
             <tbody>
               {sessions.length === 0 ? (
-                <tr><td colSpan={8} style={{textAlign: 'center', padding: '18px', color: '#fff', background: '#22305a'}}>No sessions found.</td></tr>
+                <tr><td colSpan={9} style={{textAlign: 'center', padding: '18px', color: '#fff', background: '#22305a'}}>No sessions found.</td></tr>
               ) : (
                 sessions.map((s, idx) => (
                   <tr key={s.id} style={{background: idx % 2 === 0 ? '#22305a' : '#18223a', color: '#fff', transition: 'background 0.2s'}}>
@@ -66,6 +68,16 @@ const ResultsSection = () => {
                     <td style={{padding: '13px', textAlign: 'left', border: 'none', borderRadius: '8px', wordBreak: 'break-word', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160}}>{typeof s.exam?.competency === 'object' ? s.exam.competency.title : '-'}</td>
                     <td style={{padding: '13px', textAlign: 'center', border: 'none', borderRadius: '8px', wordBreak: 'break-word', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160}}>{s.started_at ? new Date(s.started_at).toLocaleString() : '-'}</td>
                     <td style={{padding: '13px', textAlign: 'center', border: 'none', borderRadius: '8px', wordBreak: 'break-word', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160}}>{s.submitted_at ? new Date(s.submitted_at).toLocaleString() : '-'}</td>
+                    <td style={{padding: '13px', textAlign: 'center', border: 'none'}}>
+                      {s.status === 'GRADED' ? (
+                        <button
+                          onClick={() => navigate(`/exam/review/${s.id}`)}
+                          style={{background:'#1976d2',color:'#fff',border:'none',borderRadius:6,padding:'6px 14px',fontWeight:600,cursor:'pointer'}}
+                        >Review</button>
+                      ) : (
+                        <span style={{color:'#888'}}>-</span>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}
@@ -167,19 +179,164 @@ const ProfileSection = () => {
         </div>
       )}
       <div style={{marginBottom: 10}}><b>Employee Number:</b> {user.employee_number || '-'}</div>
-      <div style={{marginBottom: 10}}><b>Branch:</b> {user.employee_branch || '-'}</div>
+      <div style={{marginBottom: 10}}>
+        <b>Branch:</b> {user.employee_branch && user.employee_branch.name ? `${user.employee_branch.name}${user.employee_branch.location ? ' (' + user.employee_branch.location + ')' : ''}` : '-'}
+      </div>
       <div style={{marginBottom: 10}}><b>Role:</b> {user.role || '-'}</div>
-      <div style={{marginBottom: 10}}><b>Competency Level:</b> {user.current_competency_level || '-'}</div>
-      <div style={{marginBottom: 10}}><b>Total Points:</b> {user.total_competency_points || '-'}</div>
+
+      {/* ---- Competency level & points panel ---- */}
+      <CompetencyLevelPanel user={user} />
     </div>
   );
 };
+
+// Compact panel showing current CL, total points, required CL (from position),
+// and a progress bar towards the next level threshold.
+function CompetencyLevelPanel({ user }) {
+  const total = Number(user.total_competency_points || 0);
+  const current = user.current_competency_level || 'CL0';
+  const required = user.min_required_level || null;
+  const t = user.competency_level_thresholds || {};
+  const order = ['CL1', 'CL2', 'CL3', 'CL4'];
+  // Find the next threshold the employee has not yet reached
+  const nextLevel = order.find((lvl) => Number(t[lvl] || 0) > total);
+  const nextThreshold = nextLevel ? Number(t[nextLevel] || 0) : null;
+  // Find the previous threshold (current level base) so progress is relative
+  const prevLevel = nextLevel
+    ? order[Math.max(0, order.indexOf(nextLevel) - 1)]
+    : 'CL4';
+  const prevThreshold = nextLevel && order.indexOf(nextLevel) > 0
+    ? Number(t[prevLevel] || 0)
+    : 0;
+  const span = (nextThreshold || 0) - prevThreshold;
+  const filled = span > 0 ? Math.min(1, Math.max(0, (total - prevThreshold) / span)) : 1;
+
+  const meetsRequired = (() => {
+    if (!required) return null;
+    const rank = { CL0: 0, CL1: 1, CL2: 2, CL3: 3, CL4: 4 };
+    return rank[current] >= rank[required];
+  })();
+
+  return (
+    <div style={{background: '#18223a', borderRadius: 12, padding: 16, marginTop: 12}}>
+      <div style={{display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8}}>
+        <div>
+          <div style={{fontSize: 12, color: '#9bb0e0'}}>Current Level</div>
+          <div style={{fontSize: 22, fontWeight: 800}}>{current}</div>
+        </div>
+        <div style={{textAlign: 'right'}}>
+          <div style={{fontSize: 12, color: '#9bb0e0'}}>Total Points</div>
+          <div style={{fontSize: 22, fontWeight: 800}}>{total}</div>
+        </div>
+      </div>
+
+      {required && (
+        <div style={{fontSize: 13, marginBottom: 12, color: meetsRequired ? '#7be1a1' : '#ffb4b4'}}>
+          {meetsRequired
+            ? `Meets required level for your position (${required}).`
+            : `Position requires ${required}. You\'re at ${current}.`}
+        </div>
+      )}
+
+      {nextLevel ? (
+        <>
+          <div style={{fontSize: 12, color: '#9bb0e0', marginBottom: 4}}>
+            {nextThreshold - total} pt{(nextThreshold - total) === 1 ? '' : 's'} to {nextLevel}
+          </div>
+          <div style={{height: 10, background: '#0e1530', borderRadius: 999, overflow: 'hidden'}}>
+            <div style={{height: '100%', width: `${Math.round(filled * 100)}%`, background: 'linear-gradient(90deg, #5b8cff, #57b3ff)', transition: 'width 300ms ease'}} />
+          </div>
+        </>
+      ) : (
+        <div style={{fontSize: 13, color: '#7be1a1'}}>Top level reached (CL4). 🏆</div>
+      )}
+
+      <div style={{marginTop: 10, fontSize: 11, color: '#7c8dbb'}}>
+        Thresholds: CL1 {t.CL1 ?? '-'} · CL2 {t.CL2 ?? '-'} · CL3 {t.CL3 ?? '-'} · CL4 {t.CL4 ?? '-'}{' '}
+        ({t.source === 'position' ? 'per-position' : 'global'})
+      </div>
+    </div>
+  );
+}
+const ArchiveSection = () => {
+  const [records, setRecords] = useState([]);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  React.useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      api.get('/training/records/'),
+      api.get('/accounts/me/'),
+    ])
+      .then(([r, u]) => {
+        setRecords(r.data?.results || r.data || []);
+        setUser(u.data);
+      })
+      .catch(() => setError('Failed to load archive.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="card p-4">Loading archive…</div>;
+  if (error) return <div className="card p-4" style={{color:'#c62828'}}>{error}</div>;
+
+  const passed = records.filter((r) => r.status === 'PASSED');
+  const total = passed.reduce((s, r) => s + Number(r.points_earned || 0), 0);
+
+  return (
+    <div className="card p-4" style={{background:'#22305a', color:'#fff', borderRadius:16}}>
+      <h3 style={{marginTop:0}}>Competency Archive</h3>
+      <div style={{fontSize:14, color:'#9bb0e0', marginBottom:12}}>
+        Every competency you've passed contributes its priority points to your total.
+      </div>
+
+      {user && <CompetencyLevelPanel user={user} />}
+
+      <div style={{marginTop:18, overflowX:'auto'}}>
+        <table style={{width:'100%', borderCollapse:'collapse', fontSize:14}}>
+          <thead>
+            <tr style={{background:'#18223a'}}>
+              <th style={{textAlign:'left', padding:'10px 12px'}}>Competency</th>
+              <th style={{textAlign:'center', padding:'10px 12px'}}>Status</th>
+              <th style={{textAlign:'right', padding:'10px 12px'}}>Points Earned</th>
+              <th style={{textAlign:'center', padding:'10px 12px'}}>Completed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {records.length === 0 ? (
+              <tr><td colSpan={4} style={{textAlign:'center', padding:14, color:'#9bb0e0'}}>No competency records yet.</td></tr>
+            ) : records.map((r, idx) => (
+              <tr key={r.id} style={{background: idx % 2 ? '#18223a' : '#22305a'}}>
+                <td style={{padding:'10px 12px'}}>{r.competency?.title || '-'}</td>
+                <td style={{padding:'10px 12px', textAlign:'center', fontWeight:600, color: r.status === 'PASSED' ? '#7be1a1' : r.status === 'FAILED' ? '#ffb4b4' : '#9bb0e0'}}>{r.status}</td>
+                <td style={{padding:'10px 12px', textAlign:'right', fontWeight:700}}>{r.status === 'PASSED' ? r.points_earned : '-'}</td>
+                <td style={{padding:'10px 12px', textAlign:'center', color:'#9bb0e0'}}>{r.date_completed || '-'}</td>
+              </tr>
+            ))}
+          </tbody>
+          {passed.length > 0 && (
+            <tfoot>
+              <tr style={{background:'#0e1530', fontWeight:700}}>
+                <td style={{padding:'10px 12px'}} colSpan={2}>Total from {passed.length} passed competenc{passed.length === 1 ? 'y' : 'ies'}</td>
+                <td style={{padding:'10px 12px', textAlign:'right'}}>{total}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+    </div>
+  );
+};
+
 const CertificateSection = () => <div className="card p-4">Certificate request coming soon…</div>;
 
 const tabs = [
   { key: "competencies", label: "My Competencies", icon: <FaBookOpen /> },
   { key: "exams", label: "Assessments", icon: <FaClipboardList /> },
   { key: "results", label: "Progress & History", icon: <FaHistory /> },
+  { key: "archive", label: "Archive", icon: <FaHistory /> },
   { key: "profile", label: "My Profile", icon: <FaUserCircle /> },
   { key: "certificate", label: "Certificates", icon: <FaCertificate /> },
 ];
@@ -312,11 +469,11 @@ export default function EmployeeDashboardModern() {
   return (
     <div style={bgStyle}>
       <div className="container py-5">
-        <div style={heroStyle} className="mb-4">
+        <div style={heroStyle} className="hero-banner mb-4">
           <img src={heroBgUrl} alt="Hospitality" style={{position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0}} />
           <div style={heroOverlay} />
           <div style={heroContent}>
-            <h1 className="fw-bold mb-2" style={{fontSize: "2.8rem", letterSpacing: "-1px", textShadow: "0 2px 16px rgba(0,0,0,0.25)"}}>Welcome to Your Training Dashboard</h1>
+            <h1 className="fw-bold mb-2 hero-title" style={{fontSize: "2.8rem", letterSpacing: "-1px", textShadow: "0 2px 16px rgba(0,0,0,0.25)"}}>Welcome to Your Training Dashboard</h1>
             <p style={{fontSize: "1.25rem", maxWidth: 700, margin: "0 auto", textShadow: "0 2px 8px rgba(0,0,0,0.18)"}}>
               Track your competencies, take exams, view your results, and manage your professional profile—all in one place.
             </p>
@@ -347,6 +504,7 @@ export default function EmployeeDashboardModern() {
           )}
           {tab === "exams" && <ExamsSection />}
           {tab === "results" && <ResultsSection />}
+          {tab === "archive" && <ArchiveSection />}
           {tab === "profile" && <ProfileSection />}
           {tab === "certificate" && <CertificateSection />}
         </div>

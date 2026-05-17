@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, include
 from training.views import (
     CompetencyListCreateView,
     CompetencyDetailView,
@@ -27,16 +27,14 @@ from training.views import (
     LevelThresholdsView,
     EmployeeRequirementView,
     ExpiringCompetenciesView,
+    EmployeeDashboardAPIView,
+    LevelDeficientReportView,
 )
-from training.views_frontend import EmployeeDashboardAPIView
    
 urlpatterns = [
-
-    # ---------------------------------------------------------
-    # COMPETENCIES
-    # ---------------------------------------------------------
-    path("competencies/", CompetencyListCreateView.as_view(), name="competency-list-create"),
-    path("competencies/<int:pk>/", CompetencyDetailView.as_view(), name="competency-detail"),
+    # Competencies (list/create + retrieve/update/delete)
+    path('competencies/', CompetencyListCreateView.as_view(), name='competency-list'),
+    path('competencies/<int:pk>/', CompetencyDetailView.as_view(), name='competency-detail'),
 
     # ---------------------------------------------------------
     # POSITION → COMPETENCY REQUIREMENTS
@@ -91,11 +89,11 @@ urlpatterns = [
     # ---------------------------------------------------------
     path("exam/grade/<int:session_id>/", GradeExamView.as_view(), name="grade-exam"),
     path("records/", CompetencyRecordListView.as_view(), name="competency-records"),
-    path("my-competencies/", MyCompetenciesView.as_view(), name="my-competencies"),
 
     # ---------------------------------------------------------
     # EMPLOYEE DASHBOARD
     # ---------------------------------------------------------
     path("employee/dashboard/", EmployeeDashboardAPIView.as_view(), name="employee-dashboard-api"),
 
+    path('reports/level-deficient/', LevelDeficientReportView.as_view(), name='level-deficient-report'),
 ]

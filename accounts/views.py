@@ -20,7 +20,7 @@ class EmployeeProfileView(APIView):
         user = request.user
         employee = get_object_or_404(User, id=employee_id, role=User.Roles.EMPLOYEE)
         # Only admin or manager of the employee's branch can delete
-        if user.is_admin() or (user.is_manager() and employee.employee_branch in user.manager_branches.all()):
+        if user.is_admin() or (user.is_manager() and employee.employee_branch in user.managed_branches_qs()):
             employee.delete()
             return Response({'message': 'Employee profile deleted.'}, status=status.HTTP_204_NO_CONTENT)
         return Response({'error': 'Not authorized to delete this employee.'}, status=status.HTTP_403_FORBIDDEN)
@@ -58,11 +58,19 @@ class AdminRegisterViewSet(viewsets.ModelViewSet):
     serializer_class = AdminRegisterSerializer
     permission_classes = [IsAdmin]  # only admins can create admins
 
+    def perform_create(self, serializer):
+        # Force role even if the client forgets/spoofs it.
+        serializer.save(role=User.Roles.ADMIN)
+
 
 class ManagerRegisterViewSet(viewsets.ModelViewSet):
     queryset = User.objects.filter(role=User.Roles.MANAGER)
     serializer_class = ManagerRegisterSerializer
     permission_classes = [IsAdmin]  # only admins can create managers
+
+    def perform_create(self, serializer):
+        # Force role to MANAGER regardless of payload.
+        serializer.save(role=User.Roles.MANAGER)
 
 
 class EmployeeRegisterViewSet(viewsets.ModelViewSet):
@@ -80,25 +88,41 @@ class EmployeeRegisterViewSet(viewsets.ModelViewSet):
             return base_qs
 
         if user.is_manager():
-            return base_qs.filter(employee_branch__in=user.manager_branches.all())
+            return base_qs.filter(employee_branch__in=user.managed_branches_qs())
 
         return base_qs.none()
 
     def perform_create(self, serializer):
         # Force role to EMPLOYEE regardless of input
+        from rest_framework import serializers as drf_serializers
         user = self.request.user
         if user.is_manager():
-            # Managers can only assign employees to their own branches
             employee_branch = serializer.validated_data.get("employee_branch")
-            if not employee_branch or employee_branch not in user.manager_branches.all():
-                raise ValueError("Managers can only assign employees to their own branches.")
-        serializer.save(role=User.Roles.EMPLOYEE)
+            # A manager's allowed branches = manager_branches (M2M) UNION
+            # their own employee_branch (the admin UI treats this as the
+            # primary branch and stores it separately, often not in the M2M).
+            allowed_ids = user.managed_branch_ids()
+            if not employee_branch or employee_branch.id not in allowed_ids:
+                raise drf_serializers.ValidationError(
+                    {"employee_branch": "Managers can only assign employees to their own branches."}
+                )
+        new_user = serializer.save(role=User.Roles.EMPLOYEE)
+        # Notify the new hire with their initial competencies (best-effort).
+        try:
+            _notify_new_hire(new_user)
+        except Exception:
+            pass
 
 
 
 class CustomLoginView(APIView):
     authentication_classes = []   # ← REQUIRED
     permission_classes = []       # ← REQUIRED
+
+    # Throttle: 10 attempts/min/IP via DEFAULT_THROTTLE_RATES['login']
+    from rest_framework.throttling import ScopedRateThrottle
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'login'
 
     def post(self, request):
         serializer = CustomLoginSerializer(data=request.data)
@@ -137,11 +161,18 @@ class PromoteEmployeeView(APIView):
         # Managers can only promote employees in their branches
         user = request.user
         if user.is_manager():
-            if not employee.employee_branch or employee.employee_branch not in user.manager_branches.all():
+            if not employee.employee_branch or employee.employee_branch not in user.managed_branches_qs():
                 return Response({"error": "Not allowed to promote this employee"}, status=403)
 
+        old_position_id = employee.position_id
         employee.position = new_position
         employee.save(update_fields=["position"])
+
+        # Notify the employee about the promotion + newly required competencies
+        try:
+            _notify_promotion(employee, old_position_id, new_position)
+        except Exception:
+            pass
 
         return Response({
             "message": "Employee promoted",
@@ -219,3 +250,78 @@ class AdminUserUpdateView(APIView):
             return Response({"error": "User not found by employee number."}, status=404)
         except Exception as e:
             return Response({"error": f"Could not update user: {e}"}, status=400)
+
+# ---------------------------------------------------------
+# NOTIFICATION HELPERS
+# ---------------------------------------------------------
+from .models import Notification
+
+def _required_competencies_for(employee, position):
+    """PositionCompetencyRequirement rows for an employee's (position, branch)."""
+    if not position:
+        return []
+    from training.models import PositionCompetencyRequirement
+    qs = PositionCompetencyRequirement.objects.filter(
+        position=position, required=True
+    ).select_related('competency')
+    if getattr(employee, 'employee_branch_id', None):
+        qs = qs.filter(branch_id=employee.employee_branch_id)
+    return list(qs)
+
+
+def _notify_new_hire(employee):
+    """Drop a single Notification listing the new hire's NEW_HIRE + general competencies."""
+    reqs = _required_competencies_for(employee, employee.position)
+    if not reqs:
+        return
+    titles = [r.competency.title for r in reqs if r.competency and r.competency.title]
+    if not titles:
+        return
+    body = (
+        f"Welcome! You have {len(titles)} competenc" + ("y" if len(titles) == 1 else "ies") + " to complete: "
+        + ", ".join(titles[:8])
+        + (f" and {len(titles)-8} more." if len(titles) > 8 else ".")
+    )
+    Notification.objects.create(
+        user=employee,
+        kind=Notification.Kind.NEW_HIRE_TASKS,
+        title='Welcome - your training has been assigned',
+        body=body,
+        link='/',
+    )
+
+
+def _notify_promotion(employee, old_position_id, new_position):
+    """Notify after a promotion. Lists competencies newly required by the new position."""
+    from training.models import PositionCompetencyRequirement
+    new_reqs = _required_competencies_for(employee, new_position)
+    new_comp_ids = {r.competency_id for r in new_reqs if r.competency_id}
+    old_comp_ids = set()
+    if old_position_id and old_position_id != getattr(new_position, 'id', None):
+        old_qs = PositionCompetencyRequirement.objects.filter(
+            position_id=old_position_id, required=True
+        )
+        if getattr(employee, 'employee_branch_id', None):
+            old_qs = old_qs.filter(branch_id=employee.employee_branch_id)
+        old_comp_ids = set(old_qs.values_list('competency_id', flat=True))
+    added_ids = new_comp_ids - old_comp_ids
+    added_titles = [
+        r.competency.title for r in new_reqs
+        if r.competency_id in added_ids and r.competency and r.competency.title
+    ]
+    if added_titles:
+        body = (
+            f"You've been promoted to {new_position.name}. "
+            f"{len(added_titles)} additional competenc" + ("y" if len(added_titles) == 1 else "ies") + " assigned: "
+            + ", ".join(added_titles[:8])
+            + (f" and {len(added_titles)-8} more." if len(added_titles) > 8 else ".")
+        )
+    else:
+        body = f"You've been promoted to {new_position.name}."
+    Notification.objects.create(
+        user=employee,
+        kind=Notification.Kind.PROMOTION_TASKS,
+        title='You have been promoted',
+        body=body,
+        link='/',
+    )

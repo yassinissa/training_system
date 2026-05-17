@@ -1,6 +1,10 @@
 import axios from 'axios'
 
-const API_BASE = 'http://localhost:8000/api'
+// Build-time env (set in .env / .env.production). When the frontend is served
+// from the same origin as the Django API (the Render single-service setup),
+// VITE_API_BASE is '/api' (a relative path). For separate origins, set the
+// full URL like 'https://api.mycompany.com/api'.
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000/api'
 
 const api = axios.create({ baseURL: API_BASE })
 

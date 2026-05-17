@@ -76,6 +76,49 @@ export default function AdminDashboard() {
     }))
   }
 
+  // Employee lookup for the Promote tab - figures out who the promotion is for
+  // so we can filter the competency picker to only those NOT already passed.
+  const [promoEmployee, setPromoEmployee] = useState(null)
+  const [promoPassedIds, setPromoPassedIds] = useState([])
+  const [promoLookupErr, setPromoLookupErr] = useState('')
+
+  useEffect(() => {
+    const empNum = (promo.employee_number || '').trim()
+    if (!empNum) {
+      setPromoEmployee(null); setPromoPassedIds([]); setPromoLookupErr(''); return
+    }
+    let cancelled = false
+    const t = setTimeout(async () => {
+      try {
+        const ures = await api.get(`/accounts/admin/users/?employee_number=${encodeURIComponent(empNum)}`)
+        const u = (ures.data?.results || [])[0]
+        if (cancelled) return
+        if (!u) {
+          setPromoEmployee(null); setPromoPassedIds([]); setPromoLookupErr('No employee with that number'); return
+        }
+        setPromoEmployee(u); setPromoLookupErr('')
+        const rres = await api.get(`/training/records/?employee=${u.id}&status=PASSED`)
+        const recs = Array.isArray(rres.data) ? rres.data : (rres.data?.results || [])
+        const ids = recs
+          .map((r) => (typeof r.competency === 'object' ? r.competency?.id : r.competency))
+          .filter((x) => x != null)
+          .map(Number)
+        if (!cancelled) setPromoPassedIds(ids)
+      } catch {
+        if (cancelled) return
+        setPromoEmployee(null); setPromoPassedIds([]); setPromoLookupErr('Failed to look up employee')
+      }
+    }, 350)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [promo.employee_number])
+
+  // Competencies the employee has NOT yet passed - safer to assign on a promotion.
+  const availablePromoCompetencies = useMemo(() => {
+    if (!promoPassedIds.length) return competencies || []
+    const done = new Set(promoPassedIds.map(Number))
+    return (competencies || []).filter((c) => !done.has(Number(c.id)))
+  }, [competencies, promoPassedIds])
+
   // Admin user edit
   const [editUser, setEditUser] = useState({ employee_number: '', role: '', position_id: '', employee_branch_id: '', manager_branch_ids: [] })
 
@@ -302,7 +345,10 @@ export default function AdminDashboard() {
       } else if (newUser.role === 'MANAGER') {
         const payload = {
           username: newUser.username,
+          password: newUser.password,
+          role: 'MANAGER',
           employee_number: newUser.employee_number,
+          position: newUser.position_id ? Number(newUser.position_id) : null,
           manager_branches: (newUser.manager_branch_ids || []).map((id) => Number(id)),
         }
         await api.post('/register/manager/', payload)
@@ -498,12 +544,10 @@ export default function AdminDashboard() {
           <div className="row" style={{gap:8}}>
             <label className="muted">Sort</label>
             <select value={`${userSort.key}:${userSort.dir}`} onChange={(e) => { const [key, dir] = e.target.value.split(':'); setUserSort({ key, dir }) }}>
-              {['id','username','employee_number','role','position','employee_branch'].map(k => (
-                <>
-                  <option key={`${k}:asc`} value={`${k}:asc`}>{k} ↑</option>
-                  <option key={`${k}:desc`} value={`${k}:desc`}>{k} ↓</option>
-                </>
-              ))}
+              {['id','username','employee_number','role','position','employee_branch'].flatMap(k => [
+                <option key={`${k}:asc`} value={`${k}:asc`}>{k} ↑</option>,
+                <option key={`${k}:desc`} value={`${k}:desc`}>{k} ↓</option>
+              ])}
             </select>
           </div>
           <div className="row" style={{gap:8}}>
@@ -949,9 +993,32 @@ export default function AdminDashboard() {
               {(promo.competency_ids || []).length} selected
             </div>
           </div>
+          {/* Employee snapshot so the admin knows what's filtered out */}
+          {promo.employee_number && (
+            <div className="card" style={{padding:10, marginBottom:8, background:'#0f1c33', border:'1px solid #233455'}}>
+              {promoLookupErr ? (
+                <span style={{color:'#ffb4b4'}}>{promoLookupErr}</span>
+              ) : promoEmployee ? (
+                <span>
+                  Lookup: <b>{promoEmployee.username}</b>
+                  {promoEmployee.position?.name ? ` (current: ${promoEmployee.position.name})` : ''}
+                  {' — '}{promoPassedIds.length} competenc{promoPassedIds.length === 1 ? 'y' : 'ies'} already passed
+                  {' — '}showing {availablePromoCompetencies.length} new option{availablePromoCompetencies.length === 1 ? '' : 's'}.
+                </span>
+              ) : (
+                <span className="muted">Looking up employee…</span>
+              )}
+            </div>
+          )}
           <div role="listbox" aria-multiselectable="true" className="card" style={{padding:10, borderRadius:10, background:'#14233b', border:'1px solid #233455', maxHeight:260, overflowY:'auto', display:'grid', gap:8}}>
-            {competencies.length === 0 && <div className="muted">No competencies available</div>}
-            {competencies.map((c) => {
+            {availablePromoCompetencies.length === 0 && (
+              <div className="muted">
+                {promoEmployee
+                  ? 'This employee has already passed every competency in the system.'
+                  : 'No competencies available'}
+              </div>
+            )}
+            {availablePromoCompetencies.map((c) => {
               const checked = (promo.competency_ids || []).some((x) => String(x) === String(c.id))
               return (
                 <label key={c.id} className="row" style={{gap:10, alignItems:'flex-start', padding:'10px 12px', borderRadius:10, border:'1px solid ' + (checked ? '#8fb1ff' : '#2b3f61'), background: checked ? '#f3f6ff' : '#1c2f4f', cursor:'pointer', boxShadow: checked ? '0 6px 14px rgba(30,60,114,0.16)' : 'none'}}>
@@ -1042,3 +1109,4 @@ export default function AdminDashboard() {
     </div>
   )
 }
+// Set-Location "C:\Users\yassi\OneDrive\Desktop\training_system\frontend"

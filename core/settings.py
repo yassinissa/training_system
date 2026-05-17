@@ -9,6 +9,7 @@ https://docs.djangoproject.com/en/6.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
+import dj_database_url
 
 from pathlib import Path
 import os
@@ -26,13 +27,28 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-+%3fn+%5t6xcod7m$*3a(=4(kp02x=d5$@ig@v%2l9gzg)i@tq'
+# In production, set DJANGO_SECRET_KEY in the environment. The fallback
+# value is only used for local development and must NOT be used in prod.
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY',
+    'django-insecure-+%3fn+%5t6xcod7m$*3a(=4(kp02x=d5$@ig@v%2l9gzg)i@tq',
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Set DJANGO_DEBUG=0 in production environments.
+DEBUG = os.environ.get('DJANGO_DEBUG', '1') == '1'
 
 # Allow all hosts during development to enable LAN/mobile testing
-ALLOWED_HOSTS = ['*'] if DEBUG else []
+# Comma-separated env var. Always include the Render service URL once
+# you know it, e.g. 'training-system.onrender.com'.
+_ALLOWED_HOSTS_ENV = os.environ.get('DJANGO_ALLOWED_HOSTS', '')
+ALLOWED_HOSTS = (
+    ['*'] if DEBUG else [h.strip() for h in _ALLOWED_HOSTS_ENV.split(',') if h.strip()]
+)
+# Render injects its hostname into RENDER_EXTERNAL_HOSTNAME when running there.
+_render_host = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if _render_host and _render_host not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_render_host)
 
 
 # Application definition
@@ -65,6 +81,14 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    # Throttle classes for sensitive endpoints (e.g. login).
+    # Use scoped throttle on the login view; defaults apply project-wide.
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.ScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'login': '10/min',
+    },
 }
 
 SIMPLE_JWT = {
@@ -75,6 +99,8 @@ SIMPLE_JWT = {
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Whitenoise serves collected static files in production without Nginx.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -92,6 +118,8 @@ TEMPLATES = [
         'DIRS': [
             BASE_DIR / 'core' / 'templates',
             BASE_DIR / 'accounts' / 'templates',
+            # Where the React build's index.html lives after `npm run build`.
+            BASE_DIR / 'frontend' / 'dist',
         ],
         'APP_DIRS': True,
         'OPTIONS': {
@@ -170,8 +198,10 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Session-based login for temporary frontend pages
+# NOTE: web/exams/ URLs are commented out in core/urls.py since we moved to
+# React-only. Redirect to the site root instead of a dead URL.
 LOGIN_URL = '/accounts/login/'
-LOGIN_REDIRECT_URL = '/web/exams/'
+LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 
 # CORS for local React dev server
@@ -188,3 +218,46 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 # In development, allow all origins to simplify testing across devices on LAN
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
+
+
+# -----------------------------------------------------------------------------
+# PRODUCTION HARDENING (only effective when DEBUG=False)
+# -----------------------------------------------------------------------------
+
+# Whitenoise: hashed + compressed filenames for far-future caching of static files.
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
+# CORS / CSRF trusted origins from env (comma-separated). Include the frontend
+# domain if you split frontend and backend; if you serve them from one origin
+# (the default Render config below) you can leave these empty.
+_extra_origins = [o.strip() for o in os.environ.get('DJANGO_CORS_ORIGINS', '').split(',') if o.strip()]
+CORS_ALLOWED_ORIGINS = list(set(CORS_ALLOWED_ORIGINS) | set(_extra_origins))
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',') if o.strip()]
+if _render_host:
+    _https_render = f"https://{_render_host}"
+    if _https_render not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(_https_render)
+
+if not DEBUG:
+    # Render terminates TLS at the proxy and forwards HTTP to gunicorn.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 60 * 60 * 24 * 30  # 30 days
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+
+# WHERE THE REACT BUILD ENDS UP
+# build.sh copies frontend/dist/ into core/frontend_build/ so a single
+# Whitenoise STATIC_ROOT serves both Django's collected static files AND the
+# React app's hashed JS/CSS assets.
+_FRONTEND_BUILD_DIR = BASE_DIR / "frontend" / "dist"
+if _FRONTEND_BUILD_DIR.exists():
+    STATICFILES_DIRS = list(STATICFILES_DIRS) + [_FRONTEND_BUILD_DIR]

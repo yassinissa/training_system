@@ -47,6 +47,39 @@ export default function ExamQuestions() {
   }
 
   const addChoice = async (e) => {
+      // Delete a question
+      const deleteQuestion = async (qid) => {
+        if (!window.confirm('Delete this question and all its choices?')) return;
+        setError('');
+        setLoading(true);
+        try {
+          await api.delete(`/training/questions/${qid}/`);
+          success('Question deleted');
+          load();
+        } catch (e) {
+          setError(e?.response?.data || 'Failed to delete question');
+          toastError('Failed to delete question');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      // Delete a choice
+      const deleteChoice = async (cid) => {
+        if (!window.confirm('Delete this choice?')) return;
+        setError('');
+        setLoading(true);
+        try {
+          await api.delete(`/training/choices/${cid}/`);
+          success('Choice deleted');
+          load();
+        } catch (e) {
+          setError(e?.response?.data || 'Failed to delete choice');
+          toastError('Failed to delete choice');
+        } finally {
+          setLoading(false);
+        }
+      };
     e.preventDefault(); setError('')
     try {
       await api.post('/training/choices/', {
@@ -129,12 +162,18 @@ export default function ExamQuestions() {
                   {(q.choices || []).length ? (
                     <ul style={{margin:0, paddingLeft:18}}>
                       {q.choices.map((c)=> (
-                        <li key={c.id}>{c.text} {c.is_correct ? '(correct)' : ''}</li>
+                        <li key={c.id}>
+                          {c.text} {c.is_correct ? '(correct)' : ''}
+                          <button type="button" className="btn danger small" style={{marginLeft:8}} onClick={()=>deleteChoice(c.id)}>Delete</button>
+                        </li>
                       ))}
                     </ul>
                   ) : (
                     <span style={{opacity:0.6}}>—</span>
                   )}
+                  <div style={{marginTop:8}}>
+                    <button type="button" className="btn danger small" onClick={()=>deleteQuestion(q.id)}>Delete Question</button>
+                  </div>
                 </td>
               </tr>
             ))}

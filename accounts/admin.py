@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from .models import User, Position
+from .models import User, Position, Notification
 from training.models import PositionCompetencyRequirement
 from django.contrib.auth.hashers import identify_hasher
 admin.site.site_header = "Green Hills Training"
@@ -52,6 +52,7 @@ class UserAdminForm(forms.ModelForm):
 
 
 class UserAdmin(admin.ModelAdmin):
+
     class Media:
         js = ["admin/js/user_role_fields.js"]
     form = UserAdminForm
@@ -65,6 +66,19 @@ class UserAdmin(admin.ModelAdmin):
         "current_level",
     ]
     ordering = ["username"]
+
+    def save_model(self, request, obj, form, change):
+        # Ensure passwords entered in the admin UI are hashed
+        if form is not None and "password" in form.changed_data:
+            raw = form.cleaned_data.get("password")
+            if raw:
+                try:
+                    # If this succeeds, it's already a valid hashed password
+                    identify_hasher(raw)
+                except Exception:
+                    # Otherwise, treat it as plaintext and hash it
+                    obj.set_password(raw)
+        super().save_model(request, obj, form, change)
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -181,14 +195,29 @@ admin.site.register(User, UserAdmin)
 class PositionAdmin(admin.ModelAdmin):
     list_display = (
         "name",
+        "department",
         "min_required_level",
+        "cl1_min_points",
+        "cl2_min_points",
+        "cl3_min_points",
+        "cl4_min_points",
     )
-    search_fields = ("name",)
+    list_filter = ("department", "min_required_level")
+    search_fields = ("name", "department")
 
-    def get_fieldsets(self, request, obj=None):
-        return (
-            (None, {"fields": ["name", "min_required_level"]}),
-        )
+    fieldsets = (
+        (None, {
+            "fields": ["name", "department", "min_required_level"],
+        }),
+        ("Per-position level thresholds (points required to reach each CL)", {
+            "fields": ["cl1_min_points", "cl2_min_points", "cl3_min_points", "cl4_min_points"],
+            "description": (
+                "Note: User.get_competency_level() currently reads from the global "
+                "LevelThresholdSetting, not these per-position fields. Set these only "
+                "if you plan to switch to per-position thresholds."
+            ),
+        }),
+    )
 
     class PositionCompetencyRequirementInline(admin.TabularInline):
         model = PositionCompetencyRequirement
@@ -197,3 +226,12 @@ class PositionAdmin(admin.ModelAdmin):
         autocomplete_fields = ("competency", "branch")
 
     inlines = [PositionCompetencyRequirementInline]
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ('id', 'user', 'kind', 'title', 'is_read', 'created_at')
+    list_filter = ('kind', 'is_read', 'created_at')
+    search_fields = ('user__username', 'title', 'body')
+    raw_id_fields = ('user',)
+    readonly_fields = ('created_at',)

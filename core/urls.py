@@ -15,7 +15,6 @@ from accounts.views import (
     AdminUserUpdateView,
 )
 from accounts.auth_views import RefreshView
-from accounts.views import PositionViewSet
 # Router
 router = DefaultRouter()
 
@@ -57,17 +56,35 @@ urlpatterns = [
     path("api/training/", include("training.urls")),
     path("api/v1/training/", include("training.urls")),
 
-    # Simple frontend pages (temporary)
-    # path("web/exams/", include("training.web_urls")),  # Removed to switch to React-only navigation
-
     # Session-based authentication (login/logout/password views)
     path("accounts/", include("django.contrib.auth.urls")),
 ]
 
 
-# Static files (for development)
+# Static / media files (for development; in prod Whitenoise serves /static/).
 from django.conf import settings
 from django.conf.urls.static import static
 
 urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+
+# -----------------------------------------------------------------------------
+# SPA CATCH-ALL
+# Serve the React index.html for any non-API, non-admin URL so that deep
+# links like /admin/reports or /exam/review/42 reload correctly when the
+# browser hits the server directly.
+# -----------------------------------------------------------------------------
+from django.urls import re_path
+from django.views.generic import TemplateView
+
+INDEX_TEMPLATE = "index.html"
+
+class SpaIndexView(TemplateView):
+    template_name = INDEX_TEMPLATE
+
+# Any path that is NOT api/, /admin/, /accounts/, /static/, /media/ falls through.
+urlpatterns += [
+    re_path(r"^(?!api/|admin/|accounts/|static/|media/).*$",
+            SpaIndexView.as_view(), name="spa-index"),
+]

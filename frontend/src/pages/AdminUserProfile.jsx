@@ -118,7 +118,7 @@ export default function AdminUserProfile() {
           </div>
         )}
         <div style={{marginBottom: 10}}><b>Employee Number:</b> {user.employee_number || '-'}</div>
-        <div style={{marginBottom: 10}}><b>Branch:</b> {user.employee_branch || '-'}</div>
+        <div style={{marginBottom: 10}}><b>Branch:</b> {typeof user.employee_branch === 'object' && user.employee_branch !== null ? `${user.employee_branch.name}${user.employee_branch.location ? ' (' + user.employee_branch.location + ')' : ''}` : (user.employee_branch || '-')}</div>
         <div style={{marginBottom: 10}}><b>Role:</b> {user.role || '-'}</div>
         <div style={{marginBottom: 10}}><b>Competency Level:</b> {user.current_competency_level || '-'}</div>
         <div style={{marginBottom: 10}}><b>Total Points:</b> {user.total_competency_points || '-'}</div>
