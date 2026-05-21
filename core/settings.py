@@ -99,7 +99,6 @@ SIMPLE_JWT = {
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    # Whitenoise serves collected static files in production without Nginx.
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -118,7 +117,6 @@ TEMPLATES = [
         'DIRS': [
             BASE_DIR / 'core' / 'templates',
             BASE_DIR / 'accounts' / 'templates',
-            # Where the React build's index.html lives after `npm run build`.
             BASE_DIR / 'frontend' / 'dist',
         ],
         'APP_DIRS': True,
@@ -224,13 +222,19 @@ if DEBUG:
 # PRODUCTION HARDENING (only effective when DEBUG=False)
 # -----------------------------------------------------------------------------
 
-# Whitenoise: hashed + compressed filenames for far-future caching of static files.
+# Whitenoise: gzip + brotli pre-compressed copies of static files for prod.
+# We use CompressedStaticFilesStorage rather than the *Manifest* variant
+# because Vite already produces hash-keyed filenames (e.g.
+# `assets/index-DfRSak.js`). The Manifest backend would try to rewrite
+# references inside those files and break them; the plain Compressed
+# backend just gzips them and serves them as-is, which is exactly what we
+# want for a SPA bundle.
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
     },
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
     },
 }
 
@@ -252,12 +256,5 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SECURE_HSTS_SECONDS = 60 * 60 * 24 * 30  # 30 days
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_CONTENT_TYPE_NOSNIFF = True
-
-# WHERE THE REACT BUILD ENDS UP
-# build.sh copies frontend/dist/ into core/frontend_build/ so a single
-# Whitenoise STATIC_ROOT serves both Django's collected static files AND the
-# React app's hashed JS/CSS assets.
-_FRONTEND_BUILD_DIR = BASE_DIR / "frontend" / "dist"
-if _FRONTEND_BUILD_DIR.exists():
-    STATICFILES_DIRS = list(STATICFILES_DIRS) + [_FRONTEND_BUILD_DIR]
+    SECURE_CONTENT_TYPE_NOSNIFF = True 
+# WHERE THE REACT 

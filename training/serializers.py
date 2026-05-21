@@ -384,6 +384,8 @@ class ExamSessionSerializer(serializers.ModelSerializer):
             "score",
             "max_score",
             "answers",
+            "retake_allowed",
+            "parent_session",
         ]
 
 
@@ -461,6 +463,8 @@ class ExamSessionDetailSerializer(serializers.ModelSerializer):
             "score",
             "max_score",
             "answers",
+            "retake_allowed",
+            "parent_session",
         ]
 
 
@@ -498,14 +502,26 @@ class ExamSessionStartSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Invalid or inactive exam.")
 
         # Block re-take: if this employee has already submitted or had this
-        # exam graded, refuse to start a new session.
+        # exam graded, refuse to start a new session - UNLESS a manager has
+        # explicitly flagged a failed attempt with retake_allowed=True (in
+        # which case we let them start a fresh attempt; the failed record
+        # is preserved as history).
         if user and user.is_authenticated:
-            already_done = ExamSession.objects.filter(
+            done_sessions = ExamSession.objects.filter(
                 exam=exam,
                 employee=user,
                 status__in=[ExamSession.Status.SUBMITTED, ExamSession.Status.GRADED],
+            )
+            has_retake_unlock = done_sessions.filter(retake_allowed=True).exists()
+            already_done = done_sessions.exists()
+            # If there is already a fresh IN_PROGRESS session for this exam,
+            # the employee is simply resuming - allow it.
+            has_open = ExamSession.objects.filter(
+                exam=exam,
+                employee=user,
+                status=ExamSession.Status.IN_PROGRESS,
             ).exists()
-            if already_done:
+            if already_done and not has_retake_unlock and not has_open:
                 raise serializers.ValidationError(
                     "You have already submitted this assessment. You cannot retake it."
                 )

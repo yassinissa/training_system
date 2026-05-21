@@ -16,8 +16,7 @@ db.sqlite3
 # VS Code
 .vscode/
 
-# React frontend
-training-frontend/node_modules/
-training-frontend/dist/
-training-frontend/.DS_Store
-training-frontend/.env*
+# React frontend (folder is `frontend/`, kept old paths for back-compat)
+frontend/node_modules/
+frontend/dist/
+frontend/.DS_Sto

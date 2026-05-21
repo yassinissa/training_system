@@ -814,7 +814,7 @@ class GradeExamView(APIView):
         competency = exam.competency
 
         pct = (session.score / session.max_score * 100.0) if session.max_score else 0.0
-        passed = pct >= 90.0 if not override_status else (override_status == "PASSED")
+        passed = pct >= 60.0 if not override_status else (override_status == "PASSED")
 
         # Update competency record points based on requirement for position & branch
         from training.models import PositionCompetencyRequirement
@@ -904,6 +904,118 @@ class GradeAnswerView(APIView):
         ans.save()
 
         return Response({"message": "Answer graded"})
+
+
+# ---------------------------------------------------------
+# ALLOW RETAKE (Manager grants a failed employee a fresh attempt)
+# ---------------------------------------------------------
+
+class AllowRetakeView(APIView):
+    """Manager/Admin flips ``retake_allowed`` on a failed ExamSession and
+    creates a brand-new IN_PROGRESS session for the same employee/exam.
+
+    The original failed session is preserved as history so reporting still
+    shows the failed attempt.  When the employee submits the new session,
+    that new session is what gets graded - and only if it passes do points
+    get awarded.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, session_id):
+        try:
+            failed_session = ExamSession.objects.select_related(
+                "exam", "employee", "employee__employee_branch"
+            ).get(id=session_id)
+        except ExamSession.DoesNotExist:
+            return Response({"error": "Session not found"}, status=404)
+
+        user = request.user
+        # Only admins and managers (for their own branches) can grant retakes
+        if user.is_manager() and not user.is_admin():
+            employee_branch = getattr(failed_session.employee, "employee_branch", None)
+            if not employee_branch or employee_branch not in user.managed_branches_qs():
+                return Response(
+                    {"error": "Not allowed to allow retake for this session"},
+                    status=403,
+                )
+        elif not user.is_admin():
+            return Response({"error": "Not allowed"}, status=403)
+
+        # Session must already be graded
+        if failed_session.status != ExamSession.Status.GRADED:
+            return Response(
+                {"error": "Exam must be graded before a retake can be granted."},
+                status=400,
+            )
+
+        # Only failed sessions are eligible for retake
+        pct = (
+            (failed_session.score / failed_session.max_score * 100.0)
+            if failed_session.max_score
+            else 0.0
+        )
+        if pct >= 60.0:
+            return Response(
+                {"error": "This exam was passed - no retake needed."},
+                status=400,
+            )
+
+        # Flag the failed session and clean up any orphan open sessions
+        failed_session.retake_allowed = True
+        failed_session.save(update_fields=["retake_allowed"])
+
+        exam = failed_session.exam
+        employee = failed_session.employee
+
+        # If a fresh retake is already pending, reuse it
+        new_session = (
+            ExamSession.objects
+            .filter(
+                exam=exam,
+                employee=employee,
+                status=ExamSession.Status.IN_PROGRESS,
+                parent_session=failed_session,
+            )
+            .order_by("-started_at")
+            .first()
+        )
+        if new_session is None:
+            # Expire any stray IN_PROGRESS for this (exam, employee) so we
+            # never end up with two competing open sessions.
+            ExamSession.objects.filter(
+                exam=exam,
+                employee=employee,
+                status=ExamSession.Status.IN_PROGRESS,
+            ).update(status=ExamSession.Status.EXPIRED)
+
+            new_session = ExamSession.objects.create(
+                exam=exam,
+                employee=employee,
+                parent_session=failed_session,
+            )
+
+        # Notify the employee
+        try:
+            from accounts.models import Notification
+            Notification.objects.create(
+                user=employee,
+                kind=Notification.Kind.EXAM_GRADED,
+                title="Retake unlocked",
+                body=(
+                    f"Your manager has allowed you to retake '{exam.title}'. "
+                    "The previous attempt remains in your history."
+                ),
+                link=f"/employee/exam/{exam.id}",
+            )
+        except Exception:
+            pass
+
+        return Response({
+            "message": "Retake granted",
+            "original_session_id": failed_session.id,
+            "new_session_id": new_session.id,
+            "exam_id": exam.id,
+        })
 
 
 # ---------------------------------------------------------

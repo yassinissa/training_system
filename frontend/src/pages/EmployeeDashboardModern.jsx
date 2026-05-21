@@ -70,10 +70,18 @@ const ResultsSection = () => {
                     <td style={{padding: '13px', textAlign: 'center', border: 'none', borderRadius: '8px', wordBreak: 'break-word', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160}}>{s.submitted_at ? new Date(s.submitted_at).toLocaleString() : '-'}</td>
                     <td style={{padding: '13px', textAlign: 'center', border: 'none'}}>
                       {s.status === 'GRADED' ? (
-                        <button
-                          onClick={() => navigate(`/exam/review/${s.id}`)}
-                          style={{background:'#1976d2',color:'#fff',border:'none',borderRadius:6,padding:'6px 14px',fontWeight:600,cursor:'pointer'}}
-                        >Review</button>
+                        <div style={{display:'flex',flexDirection:'column',gap:6,alignItems:'center'}}>
+                          <button
+                            onClick={() => navigate(`/exam/review/${s.id}`)}
+                            style={{background:'#1976d2',color:'#fff',border:'none',borderRadius:6,padding:'6px 14px',fontWeight:600,cursor:'pointer'}}
+                          >Review</button>
+                          {getResult(s) === 'Failed' && s.retake_allowed && (
+                            <button
+                              onClick={() => navigate(`/assessment/${s.exam?.id}`)}
+                              style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:6,padding:'6px 14px',fontWeight:600,cursor:'pointer'}}
+                            >Retake</button>
+                          )}
+                        </div>
                       ) : (
                         <span style={{color:'#888'}}>-</span>
                       )}

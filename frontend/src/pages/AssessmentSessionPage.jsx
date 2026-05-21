@@ -51,8 +51,11 @@ export default function AssessmentSessionPage() {
     setLoading(true);
     setError("");
     fetchUserExamSessions().then((sessionMap) => {
-      const finished = sessionMap[examId] === "SUBMITTED" || sessionMap[examId] === "GRADED";
-      if (finished) {
+      const info = sessionMap[examId] || { status: "NONE", canStart: true };
+      // Block only when a terminal session exists AND the manager has
+      // NOT unlocked a retake. A retake-enabled failed session counts
+      // as "can start fresh".
+      if (!info.canStart) {
         if (live) { setAlreadySubmitted(true); setLoading(false); }
         return;
       }

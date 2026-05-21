@@ -19,6 +19,7 @@ from training.views import (
     SubmitExamView,
     GradeExamView,
     GradeAnswerView,
+    AllowRetakeView,
     CompetencyRecordListView,
     PublishRequirementsView,
     DashboardSummaryView,
@@ -88,6 +89,7 @@ urlpatterns = [
     # MANUAL GRADING
     # ---------------------------------------------------------
     path("exam/grade/<int:session_id>/", GradeExamView.as_view(), name="grade-exam"),
+    path("exam/sessions/<int:session_id>/allow-retake/", AllowRetakeView.as_view(), name="allow-exam-retake"),
     path("records/", CompetencyRecordListView.as_view(), name="competency-records"),
 
     # ---------------------------------------------------------

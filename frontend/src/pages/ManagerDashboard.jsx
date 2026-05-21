@@ -303,6 +303,20 @@ export default function ManagerDashboard() {
     }
   }
 
+  const deleteCompetency = async (c) => {
+    if (!c?.id) return
+    if (!window.confirm(`Delete competency "${c.title}"? This cannot be undone.`)) return
+    try {
+      await api.delete(`/training/competencies/${c.id}/`)
+      success('Competency deleted')
+      loadAll()
+    } catch (e) {
+      const msg = toMessage(e?.response?.data, 'Failed to delete competency')
+      setError(msg)
+      toastError(msg)
+    }
+  }
+
   const assignCompetency = async (e) => {
     e.preventDefault()
     setError('')
@@ -472,6 +486,26 @@ export default function ManagerDashboard() {
     } catch (e) {
       setError(toMessage(e?.response?.data, 'Failed to grade session'))
       toastError('Failed to grade session')
+    }
+  }
+
+  const allowRetake = async (sessionId) => {
+    if (!window.confirm('Allow this employee to retake the exam? The failed attempt will stay in history.')) return
+    try {
+      await api.post(`/training/exam/sessions/${sessionId}/allow-retake/`)
+      success('Retake granted - employee can now retake the exam.')
+      fetchSessions()
+      // Also refresh the lookup view if the same employee is on screen.
+      if (lookupNumber) {
+        try {
+          const res = await api.get(`/training/employee/activity/?employee_number=${encodeURIComponent(lookupNumber)}`)
+          setLookupResult(res.data)
+        } catch (_) { /* silent */ }
+      }
+    } catch (e) {
+      const msg = toMessage(e?.response?.data, 'Failed to allow retake')
+      setError(msg)
+      toastError(msg)
     }
   }
 
@@ -683,7 +717,7 @@ export default function ManagerDashboard() {
           emptyMessage="No competencies found."
         >
           <table className="table">
-            <thead><tr><th>Reference</th><th>Title</th><th>Frequency</th><th>Priority</th><th>Requires Exam</th></tr></thead>
+            <thead><tr><th>Reference</th><th>Title</th><th>Frequency</th><th>Priority</th><th>Requires Exam</th><th>Actions</th></tr></thead>
             <tbody>
               {(competencies || []).map((c) => (
                 <tr key={c.id}>
@@ -692,6 +726,21 @@ export default function ManagerDashboard() {
                   <td>{c.frequency}</td>
                   <td>{c.priority_points}</td>
                   <td>{c.requires_exam ? 'Yes' : 'No'}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    <button
+                      className="btn"
+                      onClick={() => navigate(`/manager/competencies/${c.id}/edit`)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      className="btn"
+                      style={{ marginLeft: 6, background: '#dc2626', color: '#fff', borderColor: '#dc2626' }}
+                      onClick={() => deleteCompetency(c)}
+                    >
+                      Delete
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -783,19 +832,36 @@ export default function ManagerDashboard() {
           emptyMessage="No sessions for current filters."
         >
           <table className="table">
-            <thead><tr><th>ID</th><th>Employee</th><th>Exam</th><th>Status</th><th>Score</th><th>Started</th><th>Submitted</th></tr></thead>
+            <thead><tr><th>ID</th><th>Employee</th><th>Exam</th><th>Status</th><th>Result</th><th>Score</th><th>Started</th><th>Submitted</th><th>Action</th></tr></thead>
             <tbody>
-              {(sessions || []).map((s) => (
-                <tr key={s.id}>
-                  <td>{s.id}</td>
-                  <td>{typeof s.employee === 'object' ? (s.employee?.username ?? s.employee?.employee_number ?? s.employee?.id ?? '—') : (s.employee ?? '—')}</td>
-                  <td>{typeof s.exam === 'object' ? (s.exam?.title ?? s.exam?.id ?? '—') : (s.exam ?? '—')}</td>
-                  <td>{s.status}</td>
-                  <td>{s.score ?? '—'}{s.max_score ? ` / ${s.max_score}` : ''}</td>
-                  <td>{s.started_at || '—'}</td>
-                  <td>{s.submitted_at || '—'}</td>
-                </tr>
-              ))}
+              {(sessions || []).map((s) => {
+                const pct = (s.status === 'GRADED' && s.max_score)
+                  ? (Number(s.score || 0) / Number(s.max_score)) * 100 : null
+                const isFailed = s.status === 'GRADED' && pct !== null && pct < 60
+                const canRetake = isFailed && !s.retake_allowed
+                return (
+                  <tr key={s.id}>
+                    <td>{s.id}</td>
+                    <td>{typeof s.employee === 'object' ? (s.employee?.username ?? s.employee?.employee_number ?? s.employee?.id ?? '—') : (s.employee ?? '—')}</td>
+                    <td>{typeof s.exam === 'object' ? (s.exam?.title ?? s.exam?.id ?? '—') : (s.exam ?? '—')}</td>
+                    <td>{s.status}</td>
+                    <td>{pct === null ? '—' : (pct >= 60 ? 'Passed' : 'Failed')}</td>
+                    <td>{s.score ?? '—'}{s.max_score ? ` / ${s.max_score}` : ''}</td>
+                    <td>{s.started_at || '—'}</td>
+                    <td>{s.submitted_at || '—'}</td>
+                    <td>
+                      {canRetake && (
+                        <button className="btn primary" onClick={() => allowRetake(s.id)}>
+                          Allow Retake
+                        </button>
+                      )}
+                      {isFailed && s.retake_allowed && (
+                        <span style={{ color: '#16a34a', fontWeight: 600 }}>Retake granted</span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </DataState>
@@ -987,21 +1053,39 @@ export default function ManagerDashboard() {
                     <th>Competency</th>
                     <th>Started At</th>
                     <th>Submitted At</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {lookupResult.sessions.map((s, idx) => (
-                    <tr key={s.id}>
-                      <td>{s.exam?.title || '-'}</td>
-                      <td>{s.status}</td>
-                      <td>{s.status === 'GRADED' ? ((s.score / s.max_score) * 100 >= 60 ? 'Passed' : 'Failed') : ''}</td>
-                      <td>{s.status === 'GRADED' && s.score != null ? s.score : '-'}</td>
-                      <td>{s.status === 'GRADED' && s.max_score != null ? s.max_score : '-'}</td>
-                      <td>{typeof s.exam?.competency === 'object' ? s.exam.competency.title : '-'}</td>
-                      <td>{s.started_at ? new Date(s.started_at).toLocaleString() : '-'}</td>
-                      <td>{s.submitted_at ? new Date(s.submitted_at).toLocaleString() : '-'}</td>
-                    </tr>
-                  ))}
+                  {lookupResult.sessions.map((s, idx) => {
+                    const pct = s.status === 'GRADED' && s.max_score
+                      ? (Number(s.score || 0) / Number(s.max_score)) * 100
+                      : null
+                    const isFailed = s.status === 'GRADED' && pct !== null && pct < 60
+                    const canRetake = isFailed && !s.retake_allowed
+                    return (
+                      <tr key={s.id}>
+                        <td>{s.exam?.title || '-'}</td>
+                        <td>{s.status}</td>
+                        <td>{pct === null ? '' : (pct >= 60 ? 'Passed' : 'Failed')}</td>
+                        <td>{s.status === 'GRADED' && s.score != null ? s.score : '-'}</td>
+                        <td>{s.status === 'GRADED' && s.max_score != null ? s.max_score : '-'}</td>
+                        <td>{typeof s.exam?.competency === 'object' ? s.exam.competency.title : '-'}</td>
+                        <td>{s.started_at ? new Date(s.started_at).toLocaleString() : '-'}</td>
+                        <td>{s.submitted_at ? new Date(s.submitted_at).toLocaleString() : '-'}</td>
+                        <td>
+                          {canRetake && (
+                            <button className="btn primary" onClick={() => allowRetake(s.id)}>
+                              Allow Retake
+                            </button>
+                          )}
+                          {isFailed && s.retake_allowed && (
+                            <span style={{ color: '#16a34a', fontWeight: 600 }}>Retake granted</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             ) : (
@@ -1068,26 +1152,4 @@ export default function ManagerDashboard() {
     </div>
   )
 
-  const tabs = [
-    { key: 'add-employee', label: 'Add Employee', content: AddEmployeeTab },
-    { key: 'employee-lookup', label: 'Employee Lookup', content: LookupTab },
-    { key: 'requirements', label: 'Requirements', content: RequirementsTab },
-    { key: 'competencies', label: 'Competencies', content: CompetenciesTab },
-    { key: 'exams', label: 'Exams', content: ExamsTab },
-    { key: 'sessions', label: 'Sessions', content: SessionsTab },
-    { key: 'grading-queue', label: 'Grading Queue', content: GradingQueueTab },
-    { key: 'level-deficient', label: 'Below Required Level', content: LevelDeficientTab },
-  ]
-
-  return (
-    <div className="container">
-      <div className="toolbar" style={{ marginBottom: 12 }}>
-        <div className="left"><h2>Manager Dashboard</h2></div>
-        <div className="right"><button className="btn" onClick={loadAll} disabled={loading}>Reload</button></div>
-      </div>
-      <DataState loading={loading} error={error} isEmpty={false}>
-        <Tabs tabs={tabs} initial="add-emp" />
-      </DataState>
-    </div>
-  )
-}
+  con

@@ -46,7 +46,7 @@ export default function ExamReviewPage() {
   const pct = session.max_score
     ? Math.round((Number(session.score || 0) / Number(session.max_score)) * 100)
     : 0
-  const passed = pct >= 90
+  const passed = pct >= 60
   const verdict = session.status === 'GRADED'
     ? (passed ? 'PASSED' : 'FAILED')
     : session.status

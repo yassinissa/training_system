@@ -291,6 +291,19 @@ class ExamSession(models.Model):
     score = models.FloatField(null=True, blank=True)
     max_score = models.FloatField(null=True, blank=True)
 
+    # When a manager allows a failed exam to be retaken, the original failed
+    # session is preserved as history and `retake_allowed` is flipped to True.
+    # The fresh attempt's `parent_session` then points back to that original
+    # failed session so we can show the retake history chain.
+    retake_allowed = models.BooleanField(default=False)
+    parent_session = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="retakes",
+    )
+
     def __str__(self):
         return f"{self.employee.username} - {self.exam.title}"
 

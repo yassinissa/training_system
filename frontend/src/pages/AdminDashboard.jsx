@@ -27,6 +27,7 @@ export default function AdminDashboard() {
   const [reportFilters, setReportFilters] = useState({ branch: '', position: '', status: '' })
   const [nonCompliance, setNonCompliance] = useState(null)
   const [sessions, setSessions] = useState([])
+  const [levelDeficient, setLevelDeficient] = useState(null)
 
   // Create form
   const [createForm, setCreateForm] = useState({ name: '', location: '', target: 0 })
@@ -212,6 +213,10 @@ export default function AdminDashboard() {
       if (reportFilters.position) q.append('position', reportFilters.position)
       const ncRes = await api.get(`/training/compliance/missing/?${q.toString()}`)
       setNonCompliance(ncRes.data)
+      try {
+        const ldRes = await api.get(`/training/reports/level-deficient/?${q.toString()}`)
+        setLevelDeficient(ldRes.data)
+      } catch { setLevelDeficient(null) }
       const sessQ = new URLSearchParams()
       if (reportFilters.branch) sessQ.append('branch', reportFilters.branch)
       if (reportFilters.status) sessQ.append('status', reportFilters.status)
@@ -224,6 +229,19 @@ export default function AdminDashboard() {
       toastError('Failed to load reports')
     } finally {
       setReportLoading(false)
+    }
+  }
+
+  const allowRetake = async (sessionId) => {
+    if (!window.confirm('Allow this employee to retake the exam? The failed attempt will stay in history.')) return
+    try {
+      await api.post(`/training/exam/sessions/${sessionId}/allow-retake/`)
+      success('Retake granted - employee can now retake the exam.')
+      runDashboardReports()
+    } catch (e) {
+      const msg = e?.response?.data || 'Failed to allow retake'
+      setError(msg)
+      toastError('Failed to allow retake')
     }
   }
 
@@ -793,6 +811,48 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {levelDeficient && (
+          <>
+            <div className="spacer" />
+            <div className="card">
+              <div className="row" style={{justifyContent:'space-between', alignItems:'center'}}>
+                <h3>Below Required Level</h3>
+                <span className="pill">{levelDeficient.count || 0} employees</span>
+              </div>
+              <div className="muted" style={{fontSize:13, marginTop:4, marginBottom:8}}>
+                Employees whose current competency level is below the minimum required by their position.
+              </div>
+              <div className="scroll-x">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Employee</th><th>Emp #</th><th>Position</th><th>Branch</th>
+                      <th>Current</th><th>Required</th><th>Points</th><th>Need</th><th>Short by</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(levelDeficient.results || []).length === 0 ? (
+                      <tr><td colSpan={9} style={{opacity:0.7}}>Everyone meets their required level.</td></tr>
+                    ) : (levelDeficient.results || []).map((r) => (
+                      <tr key={r.employee_id} onClick={() => navigate(`/admin/user-profile/${r.employee_id}`)} style={{cursor:'pointer'}}>
+                        <td>{r.username}</td>
+                        <td>{r.employee_number || '-'}</td>
+                        <td>{r.position || '-'}</td>
+                        <td>{r.branch || '-'}</td>
+                        <td style={{color:'#ef4444', fontWeight:700}}>{r.current_level}</td>
+                        <td style={{color:'#19c37d', fontWeight:700}}>{r.required_level}</td>
+                        <td>{r.total_points}</td>
+                        <td>{r.required_points}</td>
+                        <td style={{fontWeight:700}}>{r.points_short}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+
         <div className="spacer" />
         <div className="card" style={{background:'transparent', border:'none', padding:0}}>
           <h3>Sessions</h3>
@@ -812,20 +872,38 @@ export default function AdminDashboard() {
                   <th>Started</th>
                   <th>Submitted</th>
                   <th>Score</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
-                {(sessions || []).map((s) => (
-                  <tr key={s.id}>
-                    <td>{s.id}</td>
-                    <td>{typeof s.employee === 'object' ? (s.employee?.username ?? s.employee?.employee_number ?? s.employee?.id ?? '—') : (s.employee ?? '—')}</td>
-                    <td>{typeof s.exam === 'object' ? (s.exam?.title ?? s.exam?.id ?? '—') : (s.exam ?? '—')}</td>
-                    <td>{s.status}</td>
-                    <td>{s.started_at}</td>
-                    <td>{s.submitted_at || '—'}</td>
-                    <td>{s.score ?? '—'}</td>
-                  </tr>
-                ))}
+                {(sessions || []).map((s) => {
+                  const pct = s.status === 'GRADED' && s.max_score
+                    ? (Number(s.score || 0) / Number(s.max_score)) * 100
+                    : null
+                  const isFailed = s.status === 'GRADED' && pct !== null && pct < 60
+                  const canRetake = isFailed && !s.retake_allowed
+                  return (
+                    <tr key={s.id}>
+                      <td>{s.id}</td>
+                      <td>{typeof s.employee === 'object' ? (s.employee?.username ?? s.employee?.employee_number ?? s.employee?.id ?? '—') : (s.employee ?? '—')}</td>
+                      <td>{typeof s.exam === 'object' ? (s.exam?.title ?? s.exam?.id ?? '—') : (s.exam ?? '—')}</td>
+                      <td>{s.status}</td>
+                      <td>{s.started_at}</td>
+                      <td>{s.submitted_at || '—'}</td>
+                      <td>{s.score ?? '—'}</td>
+                      <td>
+                        {canRetake && (
+                          <button className="btn primary" onClick={() => allowRetake(s.id)}>
+                            Allow Retake
+                          </button>
+                        )}
+                        {isFailed && s.retake_allowed && (
+                          <span style={{ color: '#16a34a', fontWeight: 600 }}>Retake granted</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </DataState>
