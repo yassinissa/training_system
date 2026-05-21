@@ -33,64 +33,102 @@ const ResultsSection = () => {
     return percent >= 60 ? 'Passed' : 'Failed';
   };
 
+  const fmtDt = (iso) => {
+    if (!iso) return '-';
+    try { return new Date(iso).toLocaleString(); } catch { return iso; }
+  };
+
   return (
     <div className="card p-4">
       <h3 className="mb-3">Progress & History</h3>
       {loading && <div>Loading sessions…</div>}
       {error && <div style={{color: '#c62828'}}>{error}</div>}
       {!loading && !error && (
-        <div style={{overflowX: 'auto'}}>
-          <table className="table table-bordered table-hover" style={{width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontFamily: 'Segoe UI, Arial, sans-serif', fontSize: '1rem', background: '#18223a', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 16px rgba(0,32,64,0.12)'}}>
-            <thead>
-              <tr style={{background: '#22305a', color: '#fff', fontWeight: 700, letterSpacing: '0.02em'}}>
-                <th style={{padding: '14px', minWidth: 120, textAlign: 'left', border: 'none'}}>Session Name</th>
-                <th style={{padding: '14px', minWidth: 110, textAlign: 'center', border: 'none'}}>Status</th>
-                <th style={{padding: '14px', minWidth: 90, textAlign: 'center', border: 'none'}}>Result</th>
-                <th style={{padding: '14px', minWidth: 80, textAlign: 'center', border: 'none'}}>Score</th>
-                <th style={{padding: '14px', minWidth: 100, textAlign: 'center', border: 'none'}}>Max Score</th>
-                <th style={{padding: '14px', minWidth: 160, textAlign: 'left', border: 'none'}}>Competency</th>
-                <th style={{padding: '14px', minWidth: 160, textAlign: 'center', border: 'none'}}>Started At</th>
-                <th style={{padding: '14px', minWidth: 160, textAlign: 'center', border: 'none'}}>Submitted At</th>
-                <th style={{padding: '14px', minWidth: 100, textAlign: 'center', border: 'none'}}>Review</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sessions.length === 0 ? (
-                <tr><td colSpan={9} style={{textAlign: 'center', padding: '18px', color: '#fff', background: '#22305a'}}>No sessions found.</td></tr>
-              ) : (
-                sessions.map((s, idx) => (
-                  <tr key={s.id} style={{background: idx % 2 === 0 ? '#22305a' : '#18223a', color: '#fff', transition: 'background 0.2s'}}>
-                    <td style={{padding: '13px', textAlign: 'left', border: 'none', borderRadius: '8px', wordBreak: 'break-word', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160}}>{s.exam?.title || '-'}</td>
-                    <td style={{padding: '13px', textAlign: 'center', border: 'none', borderRadius: '8px', wordBreak: 'break-word', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 110}}>{s.status}</td>
-                    <td style={{padding: '13px', textAlign: 'center', border: 'none', borderRadius: '8px', wordBreak: 'break-word', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 90}}>{getResult(s)}</td>
-                    <td style={{padding: '13px', textAlign: 'center', border: 'none', borderRadius: '8px', wordBreak: 'break-word', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 80}}>{s.status === 'GRADED' && s.score != null ? s.score : '-'}</td>
-                    <td style={{padding: '13px', textAlign: 'center', border: 'none', borderRadius: '8px', wordBreak: 'break-word', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 100}}>{s.status === 'GRADED' && s.max_score != null ? s.max_score : '-'}</td>
-                    <td style={{padding: '13px', textAlign: 'left', border: 'none', borderRadius: '8px', wordBreak: 'break-word', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160}}>{typeof s.exam?.competency === 'object' ? s.exam.competency.title : '-'}</td>
-                    <td style={{padding: '13px', textAlign: 'center', border: 'none', borderRadius: '8px', wordBreak: 'break-word', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160}}>{s.started_at ? new Date(s.started_at).toLocaleString() : '-'}</td>
-                    <td style={{padding: '13px', textAlign: 'center', border: 'none', borderRadius: '8px', wordBreak: 'break-word', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160}}>{s.submitted_at ? new Date(s.submitted_at).toLocaleString() : '-'}</td>
-                    <td style={{padding: '13px', textAlign: 'center', border: 'none'}}>
-                      {s.status === 'GRADED' ? (
-                        <div style={{display:'flex',flexDirection:'column',gap:6,alignItems:'center'}}>
-                          <button
-                            onClick={() => navigate(`/exam/review/${s.id}`)}
-                            style={{background:'#1976d2',color:'#fff',border:'none',borderRadius:6,padding:'6px 14px',fontWeight:600,cursor:'pointer'}}
-                          >Review</button>
-                          {getResult(s) === 'Failed' && s.retake_allowed && (
-                            <button
-                              onClick={() => navigate(`/assessment/${s.exam?.id}`)}
-                              style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:6,padding:'6px 14px',fontWeight:600,cursor:'pointer'}}
-                            >Retake</button>
-                          )}
-                        </div>
-                      ) : (
-                        <span style={{color:'#888'}}>-</span>
+        <div style={{display:'flex',flexDirection:'column',gap:12}}>
+          {sessions.length === 0 ? (
+            <div style={{padding:18,textAlign:'center',color:'#fff',background:'#22305a',borderRadius:12}}>
+              No sessions found.
+            </div>
+          ) : (
+            sessions.map((s) => {
+              const result = getResult(s);
+              const resultColor = result === 'Passed' ? '#7be1a1' : result === 'Failed' ? '#ffb4b4' : '#9bb0e0';
+              const pct = (s.status === 'GRADED' && s.max_score)
+                ? Math.round((Number(s.score || 0) / Number(s.max_score)) * 100) : null;
+              return (
+                <div key={s.id} style={{
+                  background:'#22305a',
+                  color:'#fff',
+                  borderRadius:14,
+                  padding:14,
+                  boxShadow:'0 2px 8px rgba(0,0,0,0.18)',
+                  border:'1px solid rgba(255,255,255,0.06)',
+                }}>
+                  {/* Title + status pill */}
+                  <div style={{display:'flex',justifyContent:'space-between',gap:10,alignItems:'flex-start',flexWrap:'wrap',marginBottom:8}}>
+                    <div style={{fontWeight:700,fontSize:16,wordBreak:'break-word',flex:'1 1 60%',minWidth:0}}>
+                      {s.exam?.title || 'Exam'}
+                    </div>
+                    <span style={{
+                      fontSize:11,fontWeight:700,padding:'4px 10px',borderRadius:999,
+                      background:'rgba(255,255,255,0.10)',color:resultColor,letterSpacing:'0.5px',
+                      whiteSpace:'nowrap',
+                    }}>
+                      {result || s.status}
+                    </span>
+                  </div>
+
+                  {/* Meta grid: score + competency + dates */}
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:8,fontSize:13,color:'#cfd6e6',marginBottom:12}}>
+                    {s.status === 'GRADED' && (
+                      <div>
+                        <div style={{fontSize:11,color:'#9bb0e0',textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:2}}>Score</div>
+                        <div style={{fontWeight:600,color:'#fff'}}>{s.score ?? '-'} / {s.max_score ?? '-'}{pct != null && ` (${pct}%)`}</div>
+                      </div>
+                    )}
+                    {typeof s.exam?.competency === 'object' && (
+                      <div>
+                        <div style={{fontSize:11,color:'#9bb0e0',textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:2}}>Competency</div>
+                        <div style={{fontWeight:600,color:'#fff',wordBreak:'break-word'}}>{s.exam.competency.title}</div>
+                      </div>
+                    )}
+                    <div>
+                      <div style={{fontSize:11,color:'#9bb0e0',textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:2}}>Started</div>
+                      <div style={{fontWeight:500,color:'#fff'}}>{fmtDt(s.started_at)}</div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:11,color:'#9bb0e0',textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:2}}>Submitted</div>
+                      <div style={{fontWeight:500,color:'#fff'}}>{fmtDt(s.submitted_at)}</div>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  {s.status === 'GRADED' && (
+                    <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                      <button
+                        onClick={() => navigate(`/exam/review/${s.id}`)}
+                        style={{
+                          flex:'1 1 120px',background:'#1976d2',color:'#fff',border:'none',
+                          borderRadius:8,padding:'10px 16px',fontWeight:600,cursor:'pointer',
+                          fontSize:14,
+                        }}
+                      >Review</button>
+                      {result === 'Failed' && s.retake_allowed && (
+                        <button
+                          onClick={() => navigate(`/assessment/${s.exam?.id}`)}
+                          style={{
+                            flex:'1 1 120px',background:'#16a34a',color:'#fff',border:'none',
+                            borderRadius:8,padding:'10px 16px',fontWeight:600,cursor:'pointer',
+                            fontSize:14,
+                          }}
+                        >Retake</button>
                       )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
       )}
     </div>
