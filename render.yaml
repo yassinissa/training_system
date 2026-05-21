@@ -51,32 +51,36 @@ services:
       - key: RENDER
         value: "true"
 
-  # Optional cron - runs the yearly-competency-expiry reminders once a day at 06:00 UTC.
-  # Remove this block if you don't want the daily reminder yet.
-  - type: cron
-    name: training-reminders-daily
-    runtime: python
-    plan: free
-    region: oregon
-    branch: main
-    buildCommand: "pip install -r requirements.txt"
-    schedule: "0 6 * * *"
-    startCommand: "python manage.py send_competency_reminders"
-    envVars:
-      - key: PYTHON_VERSION
-        value: "3.12.4"
-      - key: DJANGO_DEBUG
-        value: "0"
-      - key: DJANGO_SECRET_KEY
-        fromService:
-          name: training-system
-          type: web
-          envVarKey: DJANGO_SECRET_KEY
-      - key: DJANGO_ALLOWED_HOSTS
-        value: "*"
-      - key: DATABASE_URL
-        fromDatabase:
-          name: training-db
-          property: connectionString
-      - key: RENDER
-        value: "true"
+  # Daily reminder cron is disabled on the free tier (Render no longer
+  # supports `plan: free` for cron services). To re-enable later, upgrade
+  # this block to `plan: starter` and uncomment. In the meantime you can
+  # run the reminder manually from the web service's Shell tab:
+  #   python manage.py send_competency_reminders
+  #
+  # - type: cron
+  #   name: training-reminders-daily
+  #   runtime: python
+  #   plan: starter
+  #   region: oregon
+  #   branch: main
+  #   buildCommand: "pip install -r requirements.txt"
+  #   schedule: "0 6 * * *"
+  #   startCommand: "python manage.py send_competency_reminders"
+  #   envVars:
+  #     - key: PYTHON_VERSION
+  #       value: "3.12.4"
+  #     - key: DJANGO_DEBUG
+  #       value: "0"
+  #     - key: DJANGO_SECRET_KEY
+  #       fromService:
+  #         name: training-system
+  #         type: web
+  #         envVarKey: DJANGO_SECRET_KEY
+  #     - key: DJANGO_ALLOWED_HOSTS
+  #       value: "*"
+  #     - key: DATABASE_URL
+  #       fromDatabase:
+  #         name: training-db
+  #         property: connectionString
+  #     - key: RENDER
+  #       value: "true"
