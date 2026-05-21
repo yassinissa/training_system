@@ -257,4 +257,12 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = 60 * 60 * 24 * 30  # 30 days
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_CONTENT_TYPE_NOSNIFF = True 
-# WHERE THE REACT 
+
+# WHERE THE REACT BUILD ENDS UP
+# Vite outputs the production bundle to frontend/dist/. Adding that to
+# STATICFILES_DIRS makes collectstatic copy the hashed JS/CSS chunks and
+# index.html into STATIC_ROOT (= staticfiles/), where WhiteNoise serves
+# them under /static/.
+_FRONTEND_BUILD_DIR = BASE_DIR / "frontend" / "dist"
+if _FRONTEND_BUILD_DIR.exists():
+    STATICFILES_DIRS = list(STATICFILES_DIRS) + [_FRONTEND_BUILD_DIR]
