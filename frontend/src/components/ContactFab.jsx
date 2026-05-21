@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { FaHeadset, FaWhatsapp, FaEnvelope, FaTimes } from "react-icons/fa";
+import { FaHeadset, FaWhatsapp, FaTimes, FaRegCopy } from "react-icons/fa";
+import { SiGmail } from "react-icons/si";
 
 /**
  * Floating Contact / Help button.
@@ -37,7 +38,6 @@ export default function ContactFab() {
     `https://mail.google.com/mail/?view=cm&fs=1` +
     `&to=${encodeURIComponent(SUPPORT_EMAIL)}` +
     `&su=${encodeURIComponent(EMAIL_DEFAULT_SUBJECT)}`;
-  const mailtoUrl = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(EMAIL_DEFAULT_SUBJECT)}`;
 
   const copyEmail = async (e) => {
     e.preventDefault();
@@ -63,8 +63,11 @@ export default function ContactFab() {
   };
 
   const secondaryBtn = {
-    flex: 1,
-    textAlign: "center",
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
     padding: "8px 6px",
     borderRadius: 8,
     background: "#f4f6fb",
@@ -116,19 +119,14 @@ export default function ContactFab() {
             href={gmailUrl}
             target="_blank"
             rel="noreferrer"
-            style={{ ...primaryRow, background: "#e8eef9", color: "#0d3b85", borderColor: "#bccff0" }}
+            style={{ ...primaryRow, background: "#fde8e8", color: "#b1100d", borderColor: "#f5b7b6", marginBottom: 8 }}
           >
-            <FaEnvelope style={{ fontSize: 18, color: "#1976d2" }} /> Email via Gmail
+            <SiGmail style={{ fontSize: 18, color: "#ea4335" }} /> Gmail
           </a>
 
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-            <a href={mailtoUrl} style={secondaryBtn} title="Use this device's default mail app">
-              Default mail app
-            </a>
-            <button onClick={copyEmail} style={secondaryBtn} title="Copy the email address to clipboard">
-              Copy address
-            </button>
-          </div>
+          <button onClick={copyEmail} style={secondaryBtn} title="Copy the email address to clipboard">
+            <FaRegCopy style={{ fontSize: 14 }} /> Copy address
+          </button>
 
           <div style={{ marginTop: 10, fontSize: 11, color: "#888", textAlign: "right" }}>
             {SUPPORT_EMAIL}
