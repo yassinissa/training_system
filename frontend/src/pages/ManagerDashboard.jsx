@@ -908,29 +908,72 @@ export default function ManagerDashboard() {
           {/* Grading Modal (rendered once, outside table) */}
           {gradingSession && (
             <Modal open={!!gradingSession} onClose={() => setGradingSession(null)}>
-              <div style={{ minWidth: 400, maxWidth: 600 }}>
-                <h3>Grade Exam: {gradingSession.exam?.title || gradingSession.id}</h3>
+              <div style={{ width: '100%', maxWidth: 600, color: '#0f1c34' }}>
+                <h3 style={{ margin: '0 0 12px', color: '#0f1c34' }}>
+                  Grade Exam: {gradingSession.exam?.title || gradingSession.id}
+                </h3>
                 {gradingLoading && <div>Loading...</div>}
-                {gradingError && <div className="error">{gradingError}</div>}
-                <div>
+                {gradingError && <div className="error" style={{ color: '#c62828', marginBottom: 8 }}>{gradingError}</div>}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {gradingAnswers.map((a, idx) => (
-                    <div key={a.id} className="card" style={{ marginBottom: 8 }}>
-                      <div><b>Q{idx + 1}:</b> {a.question?.text}</div>
-                      <div><b>Employee Answer:</b> {a.text_answer || (a.selected_choices?.map(c => c.text).join(', ') || '—')}</div>
-                      <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-                        <label>Points:
-                          <input type="number" min={0} max={a.question?.max_points || 1} step="any" value={a.points_awarded} onChange={e => setGradingAnswers(prev => prev.map(ans => ans.id === a.id ? { ...ans, points_awarded: e.target.value } : ans))} style={{ width: 60, marginLeft: 4 }} />
-                          / {a.question?.max_points}
+                    <div
+                      key={a.id}
+                      style={{
+                        background: '#f8fafd',
+                        border: '1px solid #e3eafc',
+                        borderRadius: 10,
+                        padding: 12,
+                        color: '#0f1c34',
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, marginBottom: 6, wordBreak: 'break-word' }}>
+                        Q{idx + 1}: {a.question?.text}
+                      </div>
+                      <div style={{ fontSize: 14, marginBottom: 10, wordBreak: 'break-word' }}>
+                        <b>Employee Answer:</b>{' '}
+                        {a.text_answer || (a.selected_choices?.map(c => c.text).join(', ') || '—')}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14 }}>
+                          Points:
+                          <input
+                            type="number"
+                            min={0}
+                            max={a.question?.max_points || 1}
+                            step="any"
+                            value={a.points_awarded}
+                            onChange={e => setGradingAnswers(prev => prev.map(ans => ans.id === a.id ? { ...ans, points_awarded: e.target.value } : ans))}
+                            style={{ width: 70, padding: '6px 8px', border: '1px solid #c8d3e8', borderRadius: 6 }}
+                          />
+                          <span style={{ color: '#647187' }}>/ {a.question?.max_points}</span>
                         </label>
-                        <input type="text" placeholder="Manager comment" value={a.manager_comment || ''} onChange={e => setGradingAnswers(prev => prev.map(ans => ans.id === a.id ? { ...ans, manager_comment: e.target.value } : ans))} style={{ flex: 1 }} />
-                        <button className="btn" onClick={() => submitAnswerGrade(a.id, a.points_awarded, a.manager_comment)}>Save</button>
+                        <input
+                          type="text"
+                          placeholder="Manager comment (optional)"
+                          value={a.manager_comment || ''}
+                          onChange={e => setGradingAnswers(prev => prev.map(ans => ans.id === a.id ? { ...ans, manager_comment: e.target.value } : ans))}
+                          style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', border: '1px solid #c8d3e8', borderRadius: 6 }}
+                        />
+                        <button
+                          className="btn"
+                          style={{ alignSelf: 'flex-end' }}
+                          onClick={() => submitAnswerGrade(a.id, a.points_awarded, a.manager_comment)}
+                        >
+                          Save
+                        </button>
                       </div>
                     </div>
                   ))}
                 </div>
-                <div className="row" style={{ gap: 8, marginTop: 12, justifyContent: 'flex-end' }}>
+                <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                   <button className="btn" onClick={() => setGradingSession(null)}>Close</button>
-                  <button className="btn primary" disabled={gradingAnswers.some(a => a.points_awarded === '' || a.points_awarded === null || a.points_awarded === undefined)} onClick={() => finalizeSessionGrade(gradingSession.id)}>Finalize Grade</button>
+                  <button
+                    className="btn primary"
+                    disabled={gradingAnswers.some(a => a.points_awarded === '' || a.points_awarded === null || a.points_awarded === undefined)}
+                    onClick={() => finalizeSessionGrade(gradingSession.id)}
+                  >
+                    Finalize Grade
+                  </button>
                 </div>
               </div>
             </Modal>
