@@ -3,15 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import api from '../api/client.js'
 
 /**
- * Employee-side exam review page.
- * Shows each question with:
- *   - the employee's submitted answer (text or selected choices)
- *   - the correct choice(s) when applicable
- *   - the manager's points awarded
- *   - the manager's comment per question
- *
- * Backed by GET /api/training/exam/sessions/<id>/ which the backend now
- * allows employees to read for their own sessions.
+ * Employee-side exam review page. Mobile-friendly.
  */
 export default function ExamReviewPage() {
   const { sessionId } = useParams()
@@ -55,21 +47,23 @@ export default function ExamReviewPage() {
     (answer.selected_choices || []).some((c) => (c.id ?? c) === choiceId)
 
   return (
-    <div className="container" style={{ padding: 24, maxWidth: 900, margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-        <h2 style={{ margin: 0 }}>{session.exam?.title || 'Exam Review'}</h2>
+    <div className="container" style={{ padding: 16, maxWidth: 900, margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, gap: 12, flexWrap: 'wrap' }}>
+        <h2 style={{ margin: 0, wordBreak: 'break-word', flex: '1 1 200px', minWidth: 0 }}>
+          {session.exam?.title || 'Exam Review'}
+        </h2>
         <button className="btn" onClick={() => navigate(-1)}>Back</button>
       </div>
 
       <div className="card" style={{ marginBottom: 18 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'center' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
           <span className="pill">Status: {session.status}</span>
-          <span className="pill">Result: {verdict}</span>
+          <span className="pill" style={{ color: passed ? '#7be1a1' : '#ffb4b4' }}>Result: {verdict}</span>
           {session.status === 'GRADED' && (
             <span className="pill">Score: {Number(session.score || 0)} / {Number(session.max_score || 0)} ({pct}%)</span>
           )}
           {session.submitted_at && (
-            <span style={{ color: '#999', fontSize: 13 }}>
+            <span style={{ color: '#999', fontSize: 13, wordBreak: 'break-word' }}>
               Submitted: {new Date(session.submitted_at).toLocaleString()}
             </span>
           )}
@@ -82,8 +76,8 @@ export default function ExamReviewPage() {
         const isTextQ = q.type === 'SHORT_TEXT' || q.type === 'LONG_TEXT'
         return (
           <div key={a.id} className="card" style={{ marginBottom: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
-              <div style={{ fontWeight: 700, fontSize: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline', flexWrap: 'wrap' }}>
+              <div style={{ fontWeight: 700, fontSize: 16, flex: '1 1 200px', minWidth: 0, wordBreak: 'break-word' }}>
                 Q{idx + 1}. {q.text}
               </div>
               <div style={{ whiteSpace: 'nowrap', fontWeight: 700, color: '#1976d2' }}>
@@ -91,40 +85,44 @@ export default function ExamReviewPage() {
               </div>
             </div>
 
-            {/* Choice-based question rendering */}
             {!isTextQ && choices.length > 0 && (
               <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {choices.map((c) => {
                   const selected = fmtChoiceSelected(a, c.id)
                   const correct = !!c.is_correct
                   const bg = correct
-                    ? 'rgba(46, 125, 50, 0.12)'        // correct = green
-                    : (selected ? 'rgba(198, 40, 40, 0.10)' : 'transparent') // wrongly picked = pink
+                    ? 'rgba(46, 125, 50, 0.12)'
+                    : (selected ? 'rgba(198, 40, 40, 0.10)' : 'transparent')
                   const border = correct
                     ? '1px solid rgba(46, 125, 50, 0.5)'
                     : (selected ? '1px solid rgba(198, 40, 40, 0.5)' : '1px solid rgba(255,255,255,0.06)')
                   return (
                     <div key={c.id} style={{
-                      padding: '8px 10px', borderRadius: 8, background: bg, border,
-                      display: 'flex', justifyContent: 'space-between', gap: 12,
+                      padding: '10px 12px', borderRadius: 8, background: bg, border,
+                      display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between',
+                      gap: 8, alignItems: 'center',
                     }}>
-                      <span>{c.text}</span>
-                      <span style={{ fontSize: 12, color: '#999' }}>
-                        {selected && (correct ? 'your answer ✓' : 'your answer ✗')}
-                        {!selected && correct && 'correct answer'}
+                      <span style={{ flex: '1 1 60%', minWidth: 0, wordBreak: 'break-word' }}>
+                        {c.text}
                       </span>
+                      {(selected || correct) && (
+                        <span style={{ fontSize: 12, color: '#9aa6b2', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          {selected && (correct ? 'your answer ✓' : 'your answer ✗')}
+                          {!selected && correct && 'correct answer'}
+                        </span>
+                      )}
                     </div>
                   )
                 })}
               </div>
             )}
 
-            {/* Text-based question rendering */}
             {isTextQ && (
               <div style={{ marginTop: 12 }}>
                 <div style={{ fontSize: 13, color: '#999', marginBottom: 4 }}>Your answer</div>
                 <div style={{
                   whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
                   background: 'rgba(255,255,255,0.04)',
                   padding: 10, borderRadius: 8,
                   border: '1px solid rgba(255,255,255,0.06)',
@@ -135,7 +133,6 @@ export default function ExamReviewPage() {
               </div>
             )}
 
-            {/* Manager comment */}
             {a.manager_comment && (
               <div style={{
                 marginTop: 12, padding: 10, borderRadius: 8,
@@ -145,7 +142,7 @@ export default function ExamReviewPage() {
                 <div style={{ fontSize: 12, color: '#c79a00', fontWeight: 700, marginBottom: 4 }}>
                   Manager comment
                 </div>
-                <div style={{ whiteSpace: 'pre-wrap' }}>{a.manager_comment}</div>
+                <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{a.manager_comment}</div>
               </div>
             )}
           </div>

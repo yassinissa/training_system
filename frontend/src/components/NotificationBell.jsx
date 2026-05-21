@@ -10,6 +10,9 @@ import api from '../api/client.js'
  * - Click bell -> toggles the dropdown.
  * - Click a notification -> marks it read and (if it has a link) navigates.
  * - "Mark all read" button clears the badge.
+ *
+ * On mobile the dropdown is `position: fixed` and anchored to the viewport's
+ * top-right with safe padding so it never overflows off-screen like a tooltip.
  */
 export default function NotificationBell() {
   const navigate = useNavigate()
@@ -28,14 +31,12 @@ export default function NotificationBell() {
     }
   }, [])
 
-  // initial load + polling
   useEffect(() => {
     fetchNotifications()
     const id = setInterval(fetchNotifications, 30000)
     return () => clearInterval(id)
   }, [fetchNotifications])
 
-  // click-outside to close
   useEffect(() => {
     if (!open) return
     const onClick = (e) => {
@@ -63,41 +64,32 @@ export default function NotificationBell() {
   const markAllRead = async () => {
     if (marking || unread === 0) return
     setMarking(true)
-    // Optimistic UI: clear the badge and grey out the rows immediately.
     const prevItems = items
     const prevUnread = unread
     setItems((arr) => arr.map((x) => ({ ...x, is_read: true })))
     setUnread(0)
 
-    // 1) Try the bulk endpoint.
     let bulkOk = false
     try {
       await api.post('/accounts/notifications/read-all/')
       bulkOk = true
     } catch (e) {
-      // eslint-disable-next-line no-console
       console.warn('read-all failed, falling back to per-row mark', e?.response?.status, e?.response?.data || e?.message)
     }
 
-    // 2) Fallback: hit /notifications/<id>/read/ for each unread one in parallel.
     if (!bulkOk) {
       const unreadIds = prevItems.filter((x) => !x.is_read).map((x) => x.id)
       try {
-        await Promise.all(
-          unreadIds.map((id) => api.post(`/accounts/notifications/${id}/read/`))
-        )
+        await Promise.all(unreadIds.map((id) => api.post(`/accounts/notifications/${id}/read/`)))
         bulkOk = true
       } catch (e) {
-        // eslint-disable-next-line no-console
         console.warn('per-row mark fallback also failed', e?.response?.status, e?.response?.data || e?.message)
       }
     }
 
     if (bulkOk) {
-      // Re-sync with the server so the count + items reflect reality.
       try { await fetchNotifications() } catch { /* ignore */ }
     } else {
-      // Roll back so the user sees the failure.
       setItems(prevItems)
       setUnread(prevUnread)
       alert('Could not mark all as read. Please try again.')
@@ -106,10 +98,8 @@ export default function NotificationBell() {
   }
 
   const fmt = (iso) => {
-    try {
-      const d = new Date(iso)
-      return d.toLocaleString()
-    } catch { return iso }
+    try { return new Date(iso).toLocaleString() }
+    catch { return iso }
   }
 
   return (
@@ -137,15 +127,24 @@ export default function NotificationBell() {
 
       {open && (
         <div style={{
-          position: 'absolute', right: 0, top: '110%', zIndex: 200,
-          width: 340, maxHeight: 420, overflowY: 'auto',
+          position: 'fixed',
+          right: 12,
+          left: 12,
+          top: 64,
+          maxWidth: 360,
+          marginLeft: 'auto',
+          zIndex: 1500,
+          maxHeight: '70vh',
+          overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch',
           background: '#fff', color: '#1a2236',
-          border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+          border: '1px solid rgba(0,0,0,0.08)', borderRadius: 12,
+          boxShadow: '0 12px 32px rgba(0,0,0,0.25)',
         }}>
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '10px 14px', borderBottom: '1px solid #eee', fontWeight: 700,
+            padding: '12px 16px', borderBottom: '1px solid #eee', fontWeight: 700,
+            position: 'sticky', top: 0, background: '#fff', zIndex: 1,
           }}>
             <span>Notifications</span>
             <button
@@ -170,7 +169,7 @@ export default function NotificationBell() {
                 key={n.id}
                 onClick={() => markRead(n)}
                 style={{
-                  padding: '10px 14px',
+                  padding: '12px 16px',
                   borderBottom: '1px solid #f1f1f1',
                   cursor: 'pointer',
                   background: n.is_read ? '#fff' : '#f5f9ff',
@@ -181,12 +180,13 @@ export default function NotificationBell() {
                   color: n.kind === 'EXAM_PASSED' ? '#2e7d32'
                        : n.kind === 'EXAM_FAILED' ? '#c62828'
                        : '#1a2236',
-                  marginBottom: 3, fontSize: 14,
+                  marginBottom: 4, fontSize: 14,
+                  wordBreak: 'break-word',
                 }}>
                   {n.title}
                 </div>
                 {n.body && (
-                  <div style={{ fontSize: 13, color: '#555', marginBottom: 4 }}>
+                  <div style={{ fontSize: 13, color: '#555', marginBottom: 4, wordBreak: 'break-word' }}>
                     {n.body}
                   </div>
                 )}
