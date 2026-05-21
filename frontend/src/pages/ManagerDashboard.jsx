@@ -1152,4 +1152,26 @@ export default function ManagerDashboard() {
     </div>
   )
 
-  con
+  const tabs = [
+    { key: 'add-employee', label: 'Add Employee', content: AddEmployeeTab },
+    { key: 'employee-lookup', label: 'Employee Lookup', content: LookupTab },
+    { key: 'requirements', label: 'Requirements', content: RequirementsTab },
+    { key: 'competencies', label: 'Competencies', content: CompetenciesTab },
+    { key: 'exams', label: 'Exams', content: ExamsTab },
+    { key: 'sessions', label: 'Sessions', content: SessionsTab },
+    { key: 'grading-queue', label: 'Grading Queue', content: GradingQueueTab },
+    { key: 'level-deficient', label: 'Below Required Level', content: LevelDeficientTab },
+  ]
+
+  return (
+    <div className="container">
+      <div className="toolbar" style={{ marginBottom: 12 }}>
+        <div className="left"><h2>Manager Dashboard</h2></div>
+        <div className="right"><button className="btn" onClick={loadAll} disabled={loading}>Reload</button></div>
+      </div>
+      <DataState loading={loading} error={error} isEmpty={false}>
+        <Tabs tabs={tabs} initial="add-employee" />
+      </DataState>
+    </div>
+  )
+}
