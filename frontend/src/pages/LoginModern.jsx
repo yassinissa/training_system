@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import './LoginModern.css';
 import api from '../api/client.js';
@@ -62,7 +61,12 @@ export default function LoginModern() {
   return (
     <div className="login-bg">
       <div className="login-card">
-        <img src="/logo-green-hills.png" alt="Green Hills" className="login-logo" />
+        <img
+          src={`${import.meta.env.BASE_URL}logo-green-hills.png`}
+          alt="Green Hills"
+          className="login-logo"
+          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+        />
         <h2>Welcome back</h2>
         <p className="login-sub">Sign in to access your dashboard</p>
         <form onSubmit={handleSubmit}>
@@ -76,26 +80,47 @@ export default function LoginModern() {
           {loginMode === 'employee' ? (
             <div className="login-field">
               <label>Employee Number</label>
-              <input type="text" value={employeeNumber} onChange={e => setEmployeeNumber(e.target.value)} placeholder="Employee Number" required disabled={loading} />
+              <input
+                type="text"
+                value={employeeNumber}
+                onChange={e => setEmployeeNumber(e.target.value)}
+                placeholder="Employee Number"
+                required
+                disabled={loading}
+              />
               <small>For employees and managers, use employee number</small>
             </div>
           ) : (
             <div className="login-field">
               <label>Username</label>
-              <input type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="Admin Username" required disabled={loading} />
+              <input
+                type="text"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                placeholder="Admin Username"
+                required
+                disabled={loading}
+              />
               <small>For admins, use your username</small>
             </div>
           )}
           <div className="login-field">
             <label>Password</label>
             <div className="login-password-row">
-              <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" required />
-              <button type="button" className="show-btn" onClick={() => setShowPassword(s => !s)}>{showPassword ? 'Hide' : 'Show'}</button>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="Password"
+                required
+                disabled={loading}
+              />
+              <button type="button" className="show-btn" onClick={() => setShowPassword(s => !s)}>
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
             </div>
           </div>
-          {error && (
-            <div className="error" style={{ color: '#ffbaba', marginBottom: 10, textAlign: 'center' }}>{error}</div>
-          )}
+          {error && <div className="error">{error}</div>}
           <button className="login-btn" type="submit" disabled={loading}>
             {loading ? 'Signing in…' : 'Sign In'}
           </button>

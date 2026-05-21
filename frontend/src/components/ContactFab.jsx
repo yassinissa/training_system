@@ -5,8 +5,6 @@ import { SiGmail } from "react-icons/si";
 /**
  * Floating Contact / Help button.
  * Mounted from App.jsx; visible bottom-right on every page when logged in.
- *
- * EDIT THESE TWO CONSTANTS TO POINT THE BUTTON ELSEWHERE:
  */
 const WHATSAPP_NUMBER = "96566244364";          // international format, NO + or spaces
 const SUPPORT_EMAIL   = "yassinissa479@gmail.com";
@@ -33,7 +31,6 @@ export default function ContactFab() {
   }, [open]);
 
   const waUrl = `https://wa.me/${encodeURIComponent(WHATSAPP_NUMBER)}?text=${encodeURIComponent(WHATSAPP_DEFAULT_MESSAGE)}`;
-  // Gmail web compose - reliably opens in a new tab regardless of OS mail handler.
   const gmailUrl =
     `https://mail.google.com/mail/?view=cm&fs=1` +
     `&to=${encodeURIComponent(SUPPORT_EMAIL)}` +
@@ -66,14 +63,14 @@ export default function ContactFab() {
     width: "100%",
     display: "flex",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    padding: "8px 6px",
-    borderRadius: 8,
+    justifyContent: "flex-start",
+    gap: 10,
+    padding: "10px 12px",
+    borderRadius: 10,
     background: "#f4f6fb",
     color: "#1a2236",
     textDecoration: "none",
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: 600,
     border: "1px solid #d4dbe7",
     cursor: "pointer",
@@ -125,7 +122,7 @@ export default function ContactFab() {
           </a>
 
           <button onClick={copyEmail} style={secondaryBtn} title="Copy the email address to clipboard">
-            <FaRegCopy style={{ fontSize: 14 }} /> Copy address
+            <FaRegCopy style={{ fontSize: 16, color: "#475569" }} /> Copy address
           </button>
 
           <div style={{ marginTop: 10, fontSize: 11, color: "#888", textAlign: "right" }}>
