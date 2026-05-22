@@ -22,9 +22,26 @@
   --danger: #ef4444;
 }
 
-* { box-sizing: border-box; }
-html, body, #root { height: 100%; }
-body { margin: 0; background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
+* { box-sizing: border-box; min-width: 0; }
+html, body, #root {
+  height: 100%;
+  /* Hard guard: the page literally cannot scroll horizontally. Long lorem
+     strings, fixed-width tables, anything that tries to overflow gets
+     clamped to the viewport width. */
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  /* Any text content that hits an edge wraps. Single long words break. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+img, video, iframe, table { max-width: 100%; height: auto; }
+table { display: block; overflow-x: auto; }
 
 .app-shell { min-height: 100vh; display: flex; flex-direction: column; }
 
@@ -394,12 +411,4 @@ select[multiple] { padding: 6px; line-height: 1.4; }
 
 /* Hero banner + assessment card mobile sizing */
 @media (max-width: 640px) {
-  .hero-banner { min-height: 140px !important; padding: 16px !important; margin-bottom: 16px !important; border-radius: 12px !important; }
-  .hero-title { font-size: 1.4rem !important; }
-  .assessment-card { padding: 18px !important; margin: 16px 10px !important; max-width: 100% !important; box-sizing: border-box; }
-  .assessment-card h2 { font-size: 1.25rem !important; }
-}
-@media (max-width: 380px) {
-  .hero-title { font-size: 1.2rem !important; }
-  .assessment-card { padding: 14px !important; margin: 12px 8px !important; }
-}
+  .hero-banner { min-height: 140px !impor
