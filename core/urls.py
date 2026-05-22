@@ -9,64 +9,66 @@ from accounts.views import (
     ManagerRegisterViewSet,
     EmployeeRegisterViewSet,
     CustomLoginView,
-    PositionViewSet, 
+    PositionViewSet,
     PromoteEmployeeView,
     AdminUserListView,
     AdminUserUpdateView,
 )
 from accounts.auth_views import RefreshView
+
 # Router
 router = DefaultRouter()
-
-# Branch endpoints
 router.register(r'branches', BranchViewSet, basename='branches')
 router.register(r'positions', PositionViewSet, basename='positions')
-
-# Registration endpoints
 router.register("register/admin", AdminRegisterViewSet, basename="register-admin")
 router.register("register/manager", ManagerRegisterViewSet, basename="register-manager")
 router.register("register/employee", EmployeeRegisterViewSet, basename="register-employee")
 
 
 urlpatterns = [
-    # Django admin
     path('admin/', admin.site.urls),
 
-    # Router-based endpoints (branches + registration)
     path('api/', include(router.urls)),
-    # v1 alias for frontend convenience
     path('api/v1/', include(router.urls)),
 
-    # Authentication
     path("api/auth/login/", CustomLoginView.as_view(), name="custom-login"),
     path("api/auth/refresh/", RefreshView.as_view(), name="token_refresh"),
     path("api/accounts/promote/", PromoteEmployeeView.as_view(), name="promote-employee"),
     path("api/accounts/admin/users/", AdminUserListView.as_view(), name="admin-user-list"),
     path("api/accounts/admin/users/update/", AdminUserUpdateView.as_view(), name="admin-user-update"),
-    # v1 aliases
     path("api/v1/auth/login/", CustomLoginView.as_view()),
     path("api/v1/auth/refresh/", RefreshView.as_view()),
     path("api/v1/accounts/promote/", PromoteEmployeeView.as_view()),
 
-
-    # Accounts API (profile, etc.)
     path("api/accounts/", include("accounts.urls")),
-
-    # Training system (competencies, exams, sessions, etc.)
     path("api/training/", include("training.urls")),
     path("api/v1/training/", include("training.urls")),
 
-    # Session-based authentication (login/logout/password views)
     path("accounts/", include("django.contrib.auth.urls")),
 ]
 
 
-# Static / media files (for development; in prod Whitenoise serves /static/).
+# Static / media files. WhiteNoise middleware serves /static/ in prod. We
+# also add an explicit URL fallback for /media/ so uploaded competency
+# images and PDFs render on Render's free tier (no S3 yet). Note: on
+# free Render, the disk is ephemeral - uploads disappear on every redeploy.
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.static import serve as static_serve
+from django.urls import re_path
 
 urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# Always-on /media/ fallback (also works when DEBUG=False).
+urlpatterns += [
+    re_path(
+        r"^media/(?P<path>.*)$",
+        static_serve,
+        {"document_root": settings.MEDIA_ROOT},
+        name="media-serve-prod",
+    ),
+]
 
 
 # -----------------------------------------------------------------------------
@@ -75,7 +77,6 @@ urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 # links like /admin/reports or /exam/review/42 reload correctly when the
 # browser hits the server directly.
 # -----------------------------------------------------------------------------
-from django.urls import re_path
 from django.views.generic import TemplateView
 
 INDEX_TEMPLATE = "index.html"

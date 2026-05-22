@@ -466,10 +466,4 @@ export default function CompetencyPage() {
           .lesson-subtitle { font-size: 0.95rem; }
           .lesson-cta { width: 100%; padding: 14px 18px; }
           .lesson-body { padding: 16px; font-size: 15.5px; }
-          .lesson-pdf, .lesson-external { padding: 16px; }
-          .lesson-pdf-iframe { height: 420px; }
-        }
-      `}</style>
-    </div>
-  );
-}
+          .lesson-pdf, .lesso
