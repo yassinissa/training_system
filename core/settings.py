@@ -266,3 +266,42 @@ if not DEBUG:
 _FRONTEND_BUILD_DIR = BASE_DIR / "frontend" / "dist"
 if _FRONTEND_BUILD_DIR.exists():
     STATICFILES_DIRS = list(STATICFILES_DIRS) + [_FRONTEND_BUILD_DIR]
+
+
+# -----------------------------------------------------------------------------
+# CLOUDFLARE R2 OBJECT STORAGE (uploaded media)
+# -----------------------------------------------------------------------------
+# Render's free disk is ephemeral - uploads disappear on every redeploy.
+# When the USE_R2_STORAGE env var is set (= "true"), Django routes file
+# uploads to a Cloudflare R2 bucket via the S3 API. Files persist forever
+# and are served from a public R2 URL (or a custom domain you point at the
+# bucket). Cost: free up to 10 GB.
+#
+# Required env vars when USE_R2_STORAGE=true:
+#   R2_ACCOUNT_ID         - 32-char hex from Cloudflare R2 dashboard
+#   R2_ACCESS_KEY_ID      - from R2 -> Manage API Tokens -> S3 Auth
+#   R2_SECRET_ACCESS_KEY  - same place (only shown once)
+#   R2_BUCKET_NAME        - the bucket you created
+#   R2_PUBLIC_URL         - e.g. https://pub-xxxx.r2.dev OR https://media.yourdomain.com
+if os.environ.get('USE_R2_STORAGE', '').lower() == 'true':
+    AWS_ACCESS_KEY_ID = os.environ['R2_ACCESS_KEY_ID']
+    AWS_SECRET_ACCESS_KEY = os.environ['R2_SECRET_ACCESS_KEY']
+    AWS_STORAGE_BUCKET_NAME = os.environ['R2_BUCKET_NAME']
+    AWS_S3_ENDPOINT_URL = f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com"
+    AWS_S3_REGION_NAME = 'auto'
+    AWS_S3_SIGNATURE_VERSION = 's3v4'
+    AWS_S3_ADDRESSING_STYLE = 'virtual'
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_DEFAULT_ACL = None
+    AWS_QUERYSTRING_AUTH = False  # public bucket; no signed URLs
+
+    # Public URL the browser will hit (R2 dev URL or custom domain).
+    _r2_public = os.environ['R2_PUBLIC_URL'].rstrip('/')
+    AWS_S3_CUSTOM_DOMAIN = _r2_public.replace('https://', '').replace('http://', '')
+    MEDIA_URL = f"{_r2_public}/"
+
+    # Route Django's default file storage to R2 via django-storages.
+    STORAGES = {
+        **STORAGES,
+        "default": {"BACKEND": "storages.backends.s3.S3Storage"},
+    }
