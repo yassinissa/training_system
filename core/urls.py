@@ -72,6 +72,47 @@ urlpatterns += [
 
 
 # -----------------------------------------------------------------------------
+# PWA FILES
+# Service worker, web app manifest, and app icons MUST be reachable at the
+# site root (e.g. /sw.js, not /static/sw.js) so the service worker scope
+# covers the whole app and the manifest's start_url resolves correctly.
+# The actual files live in STATIC_ROOT after collectstatic copies them from
+# frontend/public/ (Vite preserves that folder verbatim in dist/).
+# -----------------------------------------------------------------------------
+def _pwa_static(filename, content_type=None):
+    """Serve a single file from STATIC_ROOT at a root URL path."""
+    def view(request, _filename=filename, _ct=content_type):
+        response = static_serve(
+            request, _filename, document_root=settings.STATIC_ROOT
+        )
+        if _ct:
+            response["Content-Type"] = _ct
+        # Service worker must NOT be cached aggressively, otherwise users
+        # never get new SW versions until the 24h browser cap expires.
+        if _filename == "sw.js":
+            response["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        return response
+    view.__name__ = f"pwa_{filename.replace('.', '_').replace('-', '_')}"
+    return view
+
+
+urlpatterns += [
+    re_path(r"^manifest\.webmanifest$",
+            _pwa_static("manifest.webmanifest", "application/manifest+json"),
+            name="pwa-manifest"),
+    re_path(r"^sw\.js$",
+            _pwa_static("sw.js", "application/javascript"),
+            name="pwa-sw"),
+    re_path(r"^icon-192\.png$",
+            _pwa_static("icon-192.png", "image/png"),
+            name="pwa-icon-192"),
+    re_path(r"^icon-512\.png$",
+            _pwa_static("icon-512.png", "image/png"),
+            name="pwa-icon-512"),
+]
+
+
+# -----------------------------------------------------------------------------
 # SPA CATCH-ALL
 # Serve the React index.html for any non-API, non-admin URL so that deep
 # links like /admin/reports or /exam/review/42 reload correctly when the
