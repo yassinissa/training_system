@@ -28,6 +28,24 @@ python manage.py collectstatic --no-input
 echo "==> Running migrations"
 python manage.py migrate --no-input
 
+echo "==> Storage backend diagnostic"
+python manage.py shell -c "
+import os
+from django.conf import settings
+from django.core.files.storage import default_storage
+print('---- R2 / Storage diagnostic ----')
+print('USE_R2_STORAGE env =', repr(os.environ.get('USE_R2_STORAGE')))
+print('R2_ACCOUNT_ID set? ', 'yes' if os.environ.get('R2_ACCOUNT_ID') else 'NO')
+print('R2_ACCESS_KEY_ID set? ', 'yes' if os.environ.get('R2_ACCESS_KEY_ID') else 'NO')
+print('R2_SECRET_ACCESS_KEY set? ', 'yes' if os.environ.get('R2_SECRET_ACCESS_KEY') else 'NO')
+print('R2_BUCKET_NAME =', repr(os.environ.get('R2_BUCKET_NAME')))
+print('R2_PUBLIC_URL =', repr(os.environ.get('R2_PUBLIC_URL')))
+print('MEDIA_URL =', settings.MEDIA_URL)
+print('default_storage class =', default_storage.__class__.__module__, default_storage.__class__.__name__)
+print('STORAGES default backend =', settings.STORAGES.get('default'))
+print('-------------------------------')
+"
+
 # Bootstrap / reset the admin account. Skipped automatically if the
 # ADMIN_USERNAME or ADMIN_PASSWORD env vars are not set. Set both in the
 # Render dashboard (Environment tab) to enable.
