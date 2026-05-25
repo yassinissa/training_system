@@ -1336,6 +1336,32 @@ class EmployeeActivityView(APIView):
         records_by_status = list(records_qs.values("status").annotate(count=Count("id")))
         sessions_by_status = list(sessions_qs.values("status").annotate(count=Count("id")))
 
+        # All competencies assigned to this employee, exactly the same way the
+        # employee-side /training/my-competencies/ endpoint computes them:
+        #   1. Position-level requirements (position + branch)
+        #   2. Employee-specific requirements (overrides / one-offs)
+        # Previously this view only returned "missing_competencies", so the
+        # Manager > Employee Lookup tab always rendered "No competencies
+        # assigned" even when position requirements existed.
+        assigned_map = {}
+        if employee.position and employee.employee_branch:
+            pos_reqs = PositionCompetencyRequirement.objects.filter(
+                position=employee.position,
+                branch=employee.employee_branch,
+            ).select_related("competency")
+            for r in pos_reqs:
+                if r.competency:
+                    assigned_map[r.competency.id] = r.competency
+        emp_reqs = EmployeeCompetencyRequirement.objects.filter(
+            employee=employee,
+        ).select_related("competency")
+        for r in emp_reqs:
+            if r.competency:
+                assigned_map[r.competency.id] = r.competency
+        competencies_payload = [
+            CompetencySerializer(comp).data for comp in assigned_map.values()
+        ]
+
         return Response({
             "user": UserSerializer(employee).data,
             "totals": {
@@ -1344,6 +1370,7 @@ class EmployeeActivityView(APIView):
                 "min_required_level": min_required_level,
                 "below_min_level": below_min_level,
             },
+            "competencies": competencies_payload,
             "missing_competencies": missing,
             "records": EmployeeCompetencyRecordSerializer(records_qs, many=True).data,
             "records_by_status": records_by_status,
