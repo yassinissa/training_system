@@ -1137,15 +1137,36 @@ export default function ManagerDashboard() {
           </div>
           <div className="card" style={{marginTop:24}}>
             <h4>Competencies</h4>
-            {lookupResult?.competencies && lookupResult.competencies.length > 0 ? (
-              <ul>
-                {lookupResult.competencies.map((c) => (
-                  <li key={c.id}><b>{c.title}</b> ({c.reference_number}) - {c.description}</li>
-                ))}
-              </ul>
-            ) : (
-              <div style={{color:'#888'}}>No competencies assigned.</div>
-            )}
+            <div className="scroll-x">
+              {lookupResult?.competencies && lookupResult.competencies.length > 0 ? (
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Reference</th>
+                      <th>Title</th>
+                      <th>Area</th>
+                      <th>Frequency</th>
+                      <th>Priority</th>
+                      <th>Requires Exam</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lookupResult.competencies.map((c) => (
+                      <tr key={c.id}>
+                        <td>{c.reference_number || '—'}</td>
+                        <td>{c.title || '—'}</td>
+                        <td>{c.competency_area || '—'}</td>
+                        <td>{c.frequency || '—'}</td>
+                        <td>{c.priority_points ?? '—'}</td>
+                        <td>{c.requires_exam ? 'Yes' : 'No'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div style={{color:'#888'}}>No competencies assigned.</div>
+              )}
+            </div>
           </div>
         </>
       )}
