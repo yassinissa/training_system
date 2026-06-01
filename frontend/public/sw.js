@@ -10,7 +10,7 @@
  *     CACHE_VERSION clears the old cache automatically.
  */
 
-const CACHE_VERSION = "ghtraining-v2";
+const CACHE_VERSION = "ghtraining-v3";
 const SHELL_ASSETS = [
   "/",
   "/icon-192.png",

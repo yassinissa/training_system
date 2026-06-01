@@ -35,8 +35,10 @@ SECRET_KEY = os.environ.get(
 )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# Set DJANGO_DEBUG=0 in production environments.
-DEBUG = os.environ.get('DJANGO_DEBUG', '1') == '1'
+# Default is OFF: if DJANGO_DEBUG isn't set for any reason in production,
+# we want to fail safe rather than expose stack traces. To run locally
+# set DJANGO_DEBUG=1 in your shell or .env before `runserver`.
+DEBUG = os.environ.get('DJANGO_DEBUG', '0') == '1'
 
 # Allow all hosts during development to enable LAN/mobile testing
 # Comma-separated env var. Always include the Render service URL once
@@ -298,10 +300,4 @@ if os.environ.get('USE_R2_STORAGE', '').lower() == 'true':
     # Public URL the browser will hit (R2 dev URL or custom domain).
     _r2_public = os.environ['R2_PUBLIC_URL'].rstrip('/')
     AWS_S3_CUSTOM_DOMAIN = _r2_public.replace('https://', '').replace('http://', '')
-    MEDIA_URL = f"{_r2_public}/"
-
-    # Route Django's default file storage to R2 via django-storages.
-    STORAGES = {
-        **STORAGES,
-        "default": {"BACKEND": "storages.backends.s3.S3Storage"},
-    }
+    MEDIA_

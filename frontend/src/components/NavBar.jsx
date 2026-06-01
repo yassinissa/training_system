@@ -29,37 +29,18 @@ export default function NavBar() {
         </div>
       </div>
       <style>{`
-        @media (max-width: 700px) {
-          .navbar {
-            padding: 0.5rem 0.2rem;
-          }
-          .nav-inner {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 0.5rem;
-          }
-          .brand {
-            margin-bottom: 0.3rem;
-          }
-          .nav-actions {
-            flex-wrap: wrap;
-            gap: 0.4rem;
-          }
-          .btn, .pill {
-            font-size: 1rem;
-            padding: 0.5rem 0.7rem;
-            min-width: 90px;
-          }
-        }
+        /* All rules below are scoped under .navbar so they cannot leak
+           and override the global .btn / .pill styles in styles/global.css. */
+
         .navbar {
-          width: 100vw;
+          width: 100%;
           background: rgba(30,40,80,0.13);
           box-shadow: 0 2px 8px rgba(30,40,80,0.07);
           position: sticky;
           top: 0;
           z-index: 100;
         }
-        .nav-inner {
+        .navbar .nav-inner {
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -67,16 +48,16 @@ export default function NavBar() {
           margin: 0 auto;
           padding: 0.5rem 1.2rem;
         }
-        .brand {
+        .navbar .brand {
           display: flex;
           align-items: center;
         }
-        .nav-actions {
+        .navbar .nav-actions {
           display: flex;
           align-items: center;
           gap: 0.7rem;
         }
-        .btn {
+        .navbar .btn {
           background: rgba(255,255,255,0.18);
           border: 1.5px solid #fff;
           color: #1a2236;
@@ -86,25 +67,47 @@ export default function NavBar() {
           cursor: pointer;
           transition: background 0.15s, color 0.15s;
         }
-        .btn:hover {
+        .navbar .btn:hover {
           background: #fff;
           color: #263159;
         }
-        .btn.danger {
+        .navbar .btn.danger {
           border: 1.5px solid #e57373;
           color: #e57373;
+          background: transparent;
         }
-        .btn.danger:hover {
+        .navbar .btn.danger:hover {
           background: #e57373;
           color: #fff;
         }
-        .pill {
+        .navbar .pill {
           background: #263159;
           color: #fff;
           border-radius: 12px;
           padding: 0.3rem 0.9rem;
           font-size: 1rem;
           font-weight: 500;
+          border: none;
+        }
+
+        @media (max-width: 700px) {
+          .navbar { padding: 0.5rem 0.2rem; }
+          .navbar .nav-inner {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
+          }
+          .navbar .brand { margin-bottom: 0.3rem; }
+          .navbar .nav-actions {
+            flex-wrap: wrap;
+            gap: 0.4rem;
+          }
+          .navbar .btn,
+          .navbar .pill {
+            font-size: 1rem;
+            padding: 0.5rem 0.7rem;
+            min-width: 90px;
+          }
         }
       `}</style>
     </div>

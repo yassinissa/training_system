@@ -13,10 +13,12 @@ import ProtectedRoute from './components/ProtectedRoute.jsx'
 import NavBar from './components/NavBar.jsx'
 import Toasts from './components/Toasts.jsx'
 import ContactFab from './components/ContactFab.jsx'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import CompetencyPage from './pages/CompetencyPage.jsx'
 import AssessmentSessionPage from './pages/AssessmentSessionPage.jsx'
 import ExamReviewPage from './pages/ExamReviewPage.jsx'
+import NotFound from './pages/NotFound.jsx'
 
 function AppContent() {
   const { user } = useAuth()
@@ -52,7 +54,9 @@ function AppContent() {
         <Route path="/competency/:id" element={<ProtectedRoute><CompetencyPage /></ProtectedRoute>} />
         <Route path="/exam/review/:sessionId" element={<ProtectedRoute><ExamReviewPage /></ProtectedRoute>} />
         <Route path="/" element={dashboardElement} />
-        <Route path="*" element={<Navigate to={user ? '/' : '/login'} replace />} />
+        {/* Unknown routes show a real 404 for logged-in users; logged-out
+            users still bounce to login since they can't see anything else. */}
+        <Route path="*" element={user ? <NotFound /> : <Navigate to="/login" replace />} />
       </Routes>
     </div>
   )
@@ -60,8 +64,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ErrorBoundary>
   )
 }
