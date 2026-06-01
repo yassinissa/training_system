@@ -300,4 +300,10 @@ if os.environ.get('USE_R2_STORAGE', '').lower() == 'true':
     # Public URL the browser will hit (R2 dev URL or custom domain).
     _r2_public = os.environ['R2_PUBLIC_URL'].rstrip('/')
     AWS_S3_CUSTOM_DOMAIN = _r2_public.replace('https://', '').replace('http://', '')
-    MEDIA_
+    MEDIA_URL = f"{_r2_public}/"
+
+    # Route Django's default file storage to R2 via django-storages.
+    STORAGES = {
+        **STORAGES,
+        "default": {"BACKEND": "storages.backends.s3.S3Storage"},
+    }
