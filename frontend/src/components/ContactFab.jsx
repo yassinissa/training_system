@@ -77,8 +77,13 @@ export default function ContactFab() {
   };
 
   return (
-    <div ref={panelRef} style={{
-      position: "fixed", right: 22, bottom: 22, zIndex: 900,
+    <div ref={panelRef} className="contact-fab-root" style={{
+      position: "fixed",
+      // Honor iOS safe-area inset so the FAB sits above the home indicator
+      // and doesn't cover bottom CTAs on pages that have one.
+      right: "calc(18px + env(safe-area-inset-right, 0px))",
+      bottom: "calc(18px + env(safe-area-inset-bottom, 0px))",
+      zIndex: 900,
       display: "flex", flexDirection: "column", alignItems: "flex-end",
       gap: 10, pointerEvents: "none",
     }}>
@@ -87,7 +92,8 @@ export default function ContactFab() {
           pointerEvents: "auto",
           background: "#fff", color: "#1a2236",
           borderRadius: 14, boxShadow: "0 12px 28px rgba(0,0,0,0.25)",
-          padding: 14, width: 270, animation: "fab-pop 160ms ease",
+          padding: 14, width: 270, maxWidth: "calc(100vw - 40px)",
+          animation: "fab-pop 160ms ease",
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
             <div style={{ fontWeight: 700, fontSize: 14 }}>Need help?</div>
@@ -132,6 +138,7 @@ export default function ContactFab() {
       )}
 
       <button
+        className="contact-fab-btn"
         onClick={() => setOpen((v) => !v)}
         title={open ? "Close contact panel" : "Contact support"}
         aria-label="Contact support"
@@ -155,6 +162,10 @@ export default function ContactFab() {
         @keyframes fab-pop {
           from { opacity: 0; transform: translateY(8px); }
           to   { opacity: 1; transform: translateY(0); }
+        }
+        /* On phones, shrink the button so it doesn't cover bottom CTAs */
+        @media (max-width: 640px) {
+          .contact-fab-btn { width: 46px !important; height: 46px !important; font-size: 18px !important; }
         }
       `}</style>
     </div>

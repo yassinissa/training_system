@@ -180,11 +180,26 @@ export default function CompetencyPage() {
               Open / Download
             </a>
           </header>
-          <iframe
-            src={competency.pdf_file}
+          {/* <object> + fallback link works on iOS Safari where
+              <iframe src=PDF> just shows a blank rectangle. */}
+          <object
+            data={competency.pdf_file}
+            type="application/pdf"
             title="Competency PDF"
             className="lesson-pdf-iframe"
-          />
+          >
+            <div className="lesson-pdf-fallback">
+              <p>This device can&rsquo;t preview the PDF inline.</p>
+              <a
+                href={competency.pdf_file}
+                target="_blank"
+                rel="noreferrer"
+                className="btn primary"
+              >
+                Open the PDF
+              </a>
+            </div>
+          </object>
         </section>
       )}
 
@@ -428,6 +443,21 @@ export default function CompetencyPage() {
           border: 1px solid var(--card-border);
           border-radius: 12px;
           background: #fff;
+        }
+        .lesson-pdf-fallback {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          padding: 32px 16px;
+          text-align: center;
+          color: #1a2236;
+        }
+        .lesson-pdf-fallback p {
+          margin: 0;
+          font-size: 14px;
+          color: #475569;
         }
 
         /* Attachment gallery */

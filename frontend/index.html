@@ -17,6 +17,15 @@
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+
+    <!--
+      iOS launch image. Safari ignores manifest icons during the splash
+      moment after Add-to-Home-Screen, so without this the user sees a
+      blank white screen for ~1s. One image is a fallback that beats
+      nothing on every device; per-device-sized startup images are a
+      future polish (would need separate PNGs per iPhone model).
+    -->
+    <link rel="apple-touch-startup-image" href="/icon-512.png" />
   </head>
   <body>
     <div id="root"></div>
@@ -32,4 +41,4 @@
       }
     </script>
   </body>
-  </html>
+</html>
