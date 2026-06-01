@@ -153,15 +153,19 @@ export default function NavBar() {
           background: #fff;
           border-radius: 2px;
         }
-@media (max-width: 700px) {
+@media (max-width: 820px) {
           .navbar { padding: 0.4rem 0.3rem; }
           .navbar .nav-inner {
             padding: 0.45rem 0.6rem;
             gap: 8px;
+            flex-wrap: wrap;
+            align-items: flex-start;
           }
-          /* keep the bell from sitting on top of the hamburger */
           .navbar .nav-status {
             gap: 0.75rem;
+            order: 1;
+            width: auto;
+            margin-left: 0;
           }
           /* role pill: never wrap, smaller text on phone */
           .navbar .pill {
@@ -172,6 +176,7 @@ export default function NavBar() {
           }
           .navbar .nav-hamburger {
             display: flex;
+            order: 2;
           }
           /* Collapsed by default; expand into a panel that pushes content down */
           .navbar .nav-actions {
@@ -185,9 +190,10 @@ export default function NavBar() {
             transition: max-height 220ms ease, padding 220ms ease, margin 220ms ease;
             padding: 0;
             margin: 0;
+            width: 100%;
           }
           .navbar .nav-actions.is-open {
-            max-height: 320px;
+            max-height: 999px;
             padding: 0.5rem 0.2rem 0.2rem;
             margin-top: 0.2rem;
             border-top: 1px solid rgba(255,255,255,0.12);

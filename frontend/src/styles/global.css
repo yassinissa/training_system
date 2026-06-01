@@ -422,4 +422,5 @@ select[multiple] { padding: 6px; line-height: 1.4; }
 
 /* Hero banner + assessment card mobile sizing */
 @media (max-width: 640px) {
-  .hero-banner { min-height: 140px !impor
+  .hero-banner { min-height: 140px !important; }
+}
