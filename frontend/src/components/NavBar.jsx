@@ -153,12 +153,22 @@ export default function NavBar() {
           background: #fff;
           border-radius: 2px;
         }
-
-        @media (max-width: 700px) {
+@media (max-width: 700px) {
           .navbar { padding: 0.4rem 0.3rem; }
           .navbar .nav-inner {
-            padding: 0.45rem 0.8rem;
+            padding: 0.45rem 0.6rem;
             gap: 8px;
+          }
+          /* keep the bell from sitting on top of the hamburger */
+          .navbar .nav-status {
+            gap: 0.75rem;
+          }
+          /* role pill: never wrap, smaller text on phone */
+          .navbar .pill {
+            white-space: nowrap;
+            font-size: 0.78rem;
+            padding: 0.25rem 0.65rem;
+            min-width: 0;
           }
           .navbar .nav-hamburger {
             display: flex;
@@ -187,10 +197,6 @@ export default function NavBar() {
             text-align: center;
             padding: 0.6rem 0.8rem;
             font-size: 0.95rem;
-          }
-          .navbar .pill {
-            font-size: 0.85rem;
-            padding: 0.25rem 0.7rem;
           }
         }
       `}</style>
