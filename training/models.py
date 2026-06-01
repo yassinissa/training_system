@@ -76,6 +76,52 @@ class Competency(models.Model):
 
 
 # ---------------------------------------------------------
+# COMPETENCY ATTACHMENTS (many files per competency)
+# ---------------------------------------------------------
+
+class CompetencyAttachment(models.Model):
+    """
+    Extra files attached to a competency, on top of the legacy single
+    image / pdf_file fields. A competency can have any number of these,
+    of either kind. The file goes through default_storage, so it lives
+    on Cloudflare R2 in production automatically.
+    """
+
+    class Kind(models.TextChoices):
+        IMAGE = "IMAGE", "Image"
+        PDF = "PDF", "PDF"
+        OTHER = "OTHER", "Other"
+
+    competency = models.ForeignKey(
+        Competency,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+    )
+    file = models.FileField(upload_to="competencies/attachments/")
+    kind = models.CharField(
+        max_length=10,
+        choices=Kind.choices,
+        default=Kind.OTHER,
+    )
+    caption = models.CharField(max_length=200, blank=True)
+    order = models.PositiveIntegerField(default=0)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="competency_attachments_uploaded",
+    )
+
+    class Meta:
+        ordering = ["order", "uploaded_at"]
+
+    def __str__(self):
+        return f"{self.competency_id}: {self.file.name}"
+
+
+# ---------------------------------------------------------
 # POSITION → COMPETENCY REQUIREMENTS
 # ---------------------------------------------------------
 

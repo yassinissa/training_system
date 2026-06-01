@@ -15,13 +15,63 @@ export default function EditCompetencyPage() {
   const [removePdf, setRemovePdf] = useState(false);
   const imageInputRef = useRef();
   const pdfInputRef = useRef();
+  // ---- multi-file attachments (new) ----
+  const [attachments, setAttachments] = useState([]);
+  const [newAttachments, setNewAttachments] = useState([]);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
+  const [attachmentError, setAttachmentError] = useState('');
+  const attachmentInputRef = useRef();
 
   useEffect(() => {
     api.get(`/training/competencies/${id}/`)
-      .then(res => setForm(res.data))
+      .then(res => {
+        setForm(res.data);
+        // Backend returns nested attachments on the competency itself.
+        setAttachments(Array.isArray(res.data?.attachments) ? res.data.attachments : []);
+      })
       .catch(() => setError('Failed to load competency'))
       .finally(() => setLoading(false));
   }, [id]);
+
+  // ---- attachment helpers ----
+  const refreshAttachments = async () => {
+    try {
+      const res = await api.get(`/training/competencies/${id}/attachments/`);
+      setAttachments(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      // silent  the page is still usable without the refresh
+    }
+  };
+
+  const uploadAttachments = async () => {
+    if (!newAttachments.length) return;
+    setUploadingAttachments(true);
+    setAttachmentError('');
+    try {
+      const fd = new FormData();
+      for (const f of newAttachments) fd.append('files', f);
+      await api.post(`/training/competencies/${id}/attachments/`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setNewAttachments([]);
+      if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+      await refreshAttachments();
+    } catch {
+      setAttachmentError('Failed to upload one or more files');
+    } finally {
+      setUploadingAttachments(false);
+    }
+  };
+
+  const deleteAttachment = async (att) => {
+    if (!window.confirm('Delete this attachment? This cannot be undone.')) return;
+    try {
+      await api.delete(`/training/attachments/${att.id}/`);
+      setAttachments((prev) => prev.filter((a) => a.id !== att.id));
+    } catch {
+      setAttachmentError('Failed to delete attachment');
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -170,6 +220,78 @@ export default function EditCompetencyPage() {
               ) : null}
               {removePdf && <span style={{color:'#c00'}}>PDF will be removed</span>}
             </div>
+
+            {/* ------- Extra attachments (any number of images + PDFs) ------- */}
+            <div className="field" style={{borderTop:'1px solid #2a3866', paddingTop:14, marginTop:14}}>
+              <label style={{fontWeight:700, fontSize:15}}>Extra Attachments</label>
+              <div style={{fontSize:12, color:'#9bb0e0', marginBottom:8}}>
+                Upload as many images or PDFs as you want. These appear in
+                addition to the single Image and PDF fields above.
+              </div>
+
+              {/* existing attachments */}
+              {attachments.length > 0 && (
+                <ul style={{listStyle:'none', padding:0, margin:'0 0 10px'}}>
+                  {attachments.map((att) => (
+                    <li
+                      key={att.id}
+                      style={{
+                        display:'flex', alignItems:'center', gap:10,
+                        padding:'8px 10px', marginBottom:6,
+                        background:'rgba(255,255,255,0.04)',
+                        border:'1px solid #2a3866', borderRadius:8,
+                      }}
+                    >
+                      {att.kind === 'IMAGE' ? (
+                        <a href={att.file} target="_blank" rel="noreferrer">
+                          <img src={att.file} alt="" style={{width:48, height:48, objectFit:'cover', borderRadius:6}} />
+                        </a>
+                      ) : (
+                        <span style={{
+                          width:48, height:48, display:'inline-flex', alignItems:'center', justifyContent:'center',
+                          background:'#3a1b1b', color:'#ffb4b4', borderRadius:6, fontWeight:700, fontSize:12,
+                        }}>{att.kind === 'PDF' ? 'PDF' : 'FILE'}</span>
+                      )}
+                      <a href={att.file} target="_blank" rel="noreferrer" style={{flex:1, wordBreak:'break-all', color:'#cfe1ff'}}>
+                        {(att.file || '').split('/').pop() || `attachment-${att.id}`}
+                      </a>
+                      <button
+                        type="button"
+                        className="btn danger"
+                        onClick={() => deleteAttachment(att)}
+                      >Delete</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {/* picker for adding new ones */}
+              <div className="row" style={{gap:8, flexWrap:'wrap', alignItems:'center'}}>
+                <input
+                  type="file"
+                  ref={attachmentInputRef}
+                  multiple
+                  accept="image/*,application/pdf"
+                  onChange={(e) => setNewAttachments(Array.from(e.target.files || []))}
+                />
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={uploadAttachments}
+                  disabled={!newAttachments.length || uploadingAttachments}
+                >
+                  {uploadingAttachments
+                    ? 'Uploading…'
+                    : newAttachments.length
+                      ? `Upload ${newAttachments.length} file${newAttachments.length > 1 ? 's' : ''}`
+                      : 'Upload'}
+                </button>
+              </div>
+              {attachmentError && (
+                <div style={{color:'#ffb4b4', marginTop:6}}>{attachmentError}</div>
+              )}
+            </div>
+
             <div className="row" style={{ gap: 8, marginTop: 16 }}>
               <button className="btn primary" type="submit">Save</button>
               <button className="btn danger" type="button" onClick={handleDelete}>Delete</button>

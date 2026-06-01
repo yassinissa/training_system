@@ -16,6 +16,7 @@ from django.utils import timezone
 from datetime import date, timedelta
 from training.models import (
     Competency,
+    CompetencyAttachment,
     PositionCompetencyRequirement,
     EmployeeCompetencyRecord,
     ExamTemplate,
@@ -23,13 +24,14 @@ from training.models import (
     QuestionChoice,
     ExamSession,
     ExamAnswer,
-        
+
     EmployeeCompetencyRequirement,
     Frequency,
 )
 
 from training.serializers import (
     CompetencySerializer,
+    CompetencyAttachmentSerializer,
     PositionCompetencyRequirementSerializer,
     EmployeeCompetencyRecordSerializer,
     ExamTemplateSerializer,
@@ -44,6 +46,7 @@ from training.serializers import (
     LevelThresholdSettingSerializer,
     EmployeeCompetencyRequirementSerializer,
 )
+from rest_framework.parsers import MultiPartParser, FormParser
 from training.permissions import CanManageModules, CanManageExams, CanManageQuestions
 from training.permissions import AdminOnly
 from accounts.models import User
@@ -73,6 +76,101 @@ class CompetencyDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Competency.objects.all()
     serializer_class = CompetencySerializer
     permission_classes = [permissions.IsAuthenticated]
+
+
+# ---------------------------------------------------------
+# COMPETENCY ATTACHMENTS (many files per competency)
+# ---------------------------------------------------------
+
+def _detect_attachment_kind(uploaded_file):
+    """Best-effort kind detection from the file's MIME type / extension."""
+    ct = (getattr(uploaded_file, "content_type", "") or "").lower()
+    name = (getattr(uploaded_file, "name", "") or "").lower()
+    if ct.startswith("image/") or name.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp")):
+        return CompetencyAttachment.Kind.IMAGE
+    if ct == "application/pdf" or name.endswith(".pdf"):
+        return CompetencyAttachment.Kind.PDF
+    return CompetencyAttachment.Kind.OTHER
+
+
+class CompetencyAttachmentListCreateView(APIView):
+    """
+    GET  /api/training/competencies/<pk>/attachments/  - list attachments.
+    POST /api/training/competencies/<pk>/attachments/  - upload one or many.
+
+    POST accepts either:
+      - a single "file" field, or
+      - multiple "files" fields in the same request (multipart).
+    Optional fields: caption, order.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get(self, request, pk):
+        comp = get_object_or_404(Competency, pk=pk)
+        qs = comp.attachments.all()
+        return Response(CompetencyAttachmentSerializer(qs, many=True).data)
+
+    def post(self, request, pk):
+        # Only managers/admins can upload (mirrors competency CRUD permission).
+        if not (request.user.is_admin() or request.user.is_manager()):
+            return Response({"error": "Not allowed"}, status=status.HTTP_403_FORBIDDEN)
+
+        comp = get_object_or_404(Competency, pk=pk)
+
+        # Collect files: support both "file" (single) and "files" (multi).
+        files = request.FILES.getlist("files") or request.FILES.getlist("file")
+        if not files:
+            return Response(
+                {"error": "No file uploaded. Use 'file' or 'files' in multipart form."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        caption = (request.data.get("caption") or "").strip()
+        try:
+            base_order = int(request.data.get("order") or 0)
+        except (TypeError, ValueError):
+            base_order = 0
+
+        created = []
+        for i, f in enumerate(files):
+            att = CompetencyAttachment.objects.create(
+                competency=comp,
+                file=f,
+                kind=_detect_attachment_kind(f),
+                caption=caption,
+                order=base_order + i,
+                uploaded_by=request.user,
+            )
+            created.append(att)
+
+        return Response(
+            CompetencyAttachmentSerializer(created, many=True).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class CompetencyAttachmentDeleteView(APIView):
+    """
+    DELETE /api/training/attachments/<pk>/  - remove an attachment.
+    Also deletes the underlying file from storage (works for R2 too).
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, pk):
+        if not (request.user.is_admin() or request.user.is_manager()):
+            return Response({"error": "Not allowed"}, status=status.HTTP_403_FORBIDDEN)
+
+        att = get_object_or_404(CompetencyAttachment, pk=pk)
+        # Delete the file bytes from storage (R2 in prod, disk in dev).
+        if att.file:
+            try:
+                att.file.delete(save=False)
+            except Exception:
+                # If the file is already gone, still drop the row.
+                pass
+        att.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ---------------------------------------------------------

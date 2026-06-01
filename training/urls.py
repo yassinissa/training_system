@@ -2,6 +2,8 @@ from django.urls import path, include
 from training.views import (
     CompetencyListCreateView,
     CompetencyDetailView,
+    CompetencyAttachmentListCreateView,
+    CompetencyAttachmentDeleteView,
     PositionCompetencyRequirementCreateView,
     PositionCompetencyRequirementListView,
     PositionCompetencyRequirementDetailView,
@@ -31,11 +33,14 @@ from training.views import (
     EmployeeDashboardAPIView,
     LevelDeficientReportView,
 )
-   
+
 urlpatterns = [
     # Competencies (list/create + retrieve/update/delete)
     path('competencies/', CompetencyListCreateView.as_view(), name='competency-list'),
     path('competencies/<int:pk>/', CompetencyDetailView.as_view(), name='competency-detail'),
+    # Multi-file attachments per competency (gallery support)
+    path('competencies/<int:pk>/attachments/', CompetencyAttachmentListCreateView.as_view(), name='competency-attachments'),
+    path('attachments/<int:pk>/', CompetencyAttachmentDeleteView.as_view(), name='competency-attachment-delete'),
 
     # ---------------------------------------------------------
     # POSITION → COMPETENCY REQUIREMENTS

@@ -188,6 +188,51 @@ export default function CompetencyPage() {
         </section>
       )}
 
+      {/* ---- EXTRA ATTACHMENTS (gallery) ---- */}
+      {Array.isArray(competency.attachments) && competency.attachments.length > 0 && (
+        <section className="lesson-attachments">
+          <header className="lesson-section-header">
+            <FaImage style={{ color: "#5b8cff" }} />
+            <h3>More Resources</h3>
+          </header>
+
+          {/* image grid */}
+          {competency.attachments.some((a) => a.kind === "IMAGE") && (
+            <div className="lesson-attachment-grid">
+              {competency.attachments
+                .filter((a) => a.kind === "IMAGE")
+                .map((a) => (
+                  <a
+                    key={a.id}
+                    href={a.file}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="lesson-attachment-image"
+                  >
+                    <img src={a.file} alt={a.caption || ""} />
+                  </a>
+                ))}
+            </div>
+          )}
+
+          {/* pdf + other files as a clean list */}
+          {competency.attachments.some((a) => a.kind !== "IMAGE") && (
+            <ul className="lesson-attachment-list">
+              {competency.attachments
+                .filter((a) => a.kind !== "IMAGE")
+                .map((a) => (
+                  <li key={a.id}>
+                    <a href={a.file} target="_blank" rel="noreferrer">
+                      <FaFilePdf style={{ marginRight: 8, color: "#c62828" }} />
+                      {(a.file || "").split("/").pop() || `attachment-${a.id}`}
+                    </a>
+                  </li>
+                ))}
+            </ul>
+          )}
+        </section>
+      )}
+
       {/* ---- EXTERNAL LINK ---- */}
       {competency.external_link && (
         <section className="lesson-external">
@@ -384,6 +429,56 @@ export default function CompetencyPage() {
           border-radius: 12px;
           background: #fff;
         }
+
+        /* Attachment gallery */
+        .lesson-attachments {
+          background: var(--panel);
+          border: 1px solid var(--card-border);
+          border-radius: 16px;
+          padding: 22px;
+          margin-bottom: 22px;
+        }
+        .lesson-attachment-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+          gap: 10px;
+          margin-bottom: 14px;
+        }
+        .lesson-attachment-image {
+          display: block;
+          border-radius: 12px;
+          overflow: hidden;
+          aspect-ratio: 4/3;
+          background: rgba(255,255,255,0.04);
+        }
+        .lesson-attachment-image img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+          transition: transform 200ms ease;
+        }
+        .lesson-attachment-image:hover img { transform: scale(1.04); }
+        .lesson-attachment-list {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+        }
+        .lesson-attachment-list li {
+          margin: 6px 0;
+        }
+        .lesson-attachment-list a {
+          display: inline-flex;
+          align-items: center;
+          padding: 8px 12px;
+          background: rgba(91,140,255,0.10);
+          border: 1px solid rgba(91,140,255,0.35);
+          border-radius: 10px;
+          color: var(--accent);
+          text-decoration: none;
+          word-break: break-all;
+        }
+        .lesson-attachment-list a:hover { background: rgba(91,140,255,0.18); }
 
         /* External link */
         .lesson-external {

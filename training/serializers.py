@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from training.models import (
     Competency,
+    CompetencyAttachment,
     PositionCompetencyRequirement,
     EmployeeCompetencyRecord,
     ExamTemplate,
@@ -13,6 +14,26 @@ from training.models import (
 )
 from accounts.serializers import PositionSerializer, UserSerializer
 from branches.serializers import BranchSerializer
+
+
+# ---------------------------------------------------------
+# COMPETENCY ATTACHMENT (one row per uploaded file)
+# ---------------------------------------------------------
+
+class CompetencyAttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CompetencyAttachment
+        fields = [
+            "id",
+            "competency",
+            "file",
+            "kind",
+            "caption",
+            "order",
+            "uploaded_at",
+            "uploaded_by",
+        ]
+        read_only_fields = ["uploaded_at", "uploaded_by"]
 
 
 # ---------------------------------------------------------
@@ -53,6 +74,10 @@ class CompetencySerializer(serializers.ModelSerializer):
             if file_field in validated_data and validated_data[file_field] == "":
                 validated_data[file_field] = None
         return super().update(instance, validated_data)
+    # Nested read-only list of all attachments belonging to this competency,
+    # so the frontend can render a gallery without a second request.
+    attachments = CompetencyAttachmentSerializer(many=True, read_only=True)
+
     class Meta:
         model = Competency
         fields = [
@@ -74,8 +99,9 @@ class CompetencySerializer(serializers.ModelSerializer):
             "created_at",
             "remove_image",
             "remove_pdf_file",
+            "attachments",
         ]
-        read_only_fields = ["created_by", "created_at"]
+        read_only_fields = ["created_by", "created_at", "attachments"]
 
 
 # ---------------------------------------------------------
