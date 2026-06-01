@@ -172,8 +172,19 @@ select[multiple] { padding: 6px; line-height: 1.4; }
 
 /* Toasts */
 .toasts { position: fixed; top: 16px; right: 16px; display: flex; flex-direction: column; gap: 10px; z-index: 1000; }
-@media (max-width: 640px) { .toasts { right: 50%; transform: translateX(50%); bottom: 16px; top: auto; } }
-.toast { min-width: 260px; max-width: 92vw; background: var(--panel); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); box-shadow: 0 10px 30px rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; animation: fadeIn 180ms ease; }
+/* Mobile: anchor to bottom-center. Previous rule used `right: 50%`
+   + `translateX(50%)` which pushed the toast off the right edge.
+   Correct centering trick is left: 50% with translateX(-50%). */
+@media (max-width: 640px) {
+  .toasts {
+    top: auto;
+    right: auto;
+    left: 50%;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    align-items: center;
+  }
+}.toast { min-width: 260px; max-width: 92vw; background: var(--panel); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); box-shadow: 0 10px 30px rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; animation: fadeIn 180ms ease; }
 .toast .toast-content { font-size: 14px; }
 .toast .toast-close { background: transparent; color: var(--muted); border: 0; font-size: 18px; cursor: pointer; }
 .toast.success { border-color: rgba(25,195,125,0.4); box-shadow: 0 10px 30px rgba(25,195,125,0.15); }
