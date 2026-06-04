@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../api/client";
 import { FaTrash, FaPencilAlt } from "react-icons/fa";
+import EmployeeAttachments from "../components/EmployeeAttachments.jsx";
 
 export default function AdminUserProfile() {
   const { id } = useParams();
@@ -186,6 +187,10 @@ export default function AdminUserProfile() {
           <div style={{color:'#888'}}>No competencies assigned.</div>
         )}
       </div>
+
+      {/* Internal profile attachments (signed score sheets, photos, IDs).
+          Visible only to managers + admins, never to the employee. */}
+      {user?.id && <EmployeeAttachments employeeId={user.id} />}
     </div>
   );
 }

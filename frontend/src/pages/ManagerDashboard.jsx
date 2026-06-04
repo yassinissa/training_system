@@ -6,6 +6,7 @@ import Tabs from '../components/Tabs.jsx';
 import DataState from '../components/DataState.jsx';
 import { useAuth } from '../hooks/auth-context.jsx';
 import { useToast } from '../hooks/useToast.jsx';
+import EmployeeAttachments from '../components/EmployeeAttachments.jsx';
 
 
 export default function ManagerDashboard() {
@@ -556,8 +557,8 @@ export default function ManagerDashboard() {
           <input value={empForm.employee_number} onChange={(e) => setEmpForm((f) => ({ ...f, employee_number: e.target.value }))} />
         </div>
         <div className="row">
-          <input placeholder="Username (optional)" value={empForm.username} onChange={(e) => setEmpForm((f) => ({ ...f, username: e.target.value }))} />
-          <input placeholder="Password (optional)" value={empForm.password} onChange={(e) => setEmpForm((f) => ({ ...f, password: e.target.value }))} />
+          <input placeholder="Username " value={empForm.username} onChange={(e) => setEmpForm((f) => ({ ...f, username: e.target.value }))} />
+          <input placeholder="Password " value={empForm.password} onChange={(e) => setEmpForm((f) => ({ ...f, password: e.target.value }))} />
         </div>
         <div className="row">
           <select value={empForm.position} onChange={(e) => setEmpForm((f) => ({ ...f, position: e.target.value }))}>
@@ -1168,6 +1169,10 @@ export default function ManagerDashboard() {
               )}
             </div>
           </div>
+
+          {/* Internal profile attachments (signed score sheets, photos, IDs).
+              Visible only to managers + admins, never to the employee. */}
+          <EmployeeAttachments employeeId={assignEmployee.id} />
         </>
       )}
     </div>
