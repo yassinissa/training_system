@@ -689,3 +689,88 @@ class ManualCompetencyAward(models.Model):
             return (float(self.score) / float(self.max_score)) * 100.0
         except Exception:
             return None
+
+
+# ---------------------------------------------------------
+# EXAM ASSIGNMENT (one exam, targeted at one specific employee)
+# ---------------------------------------------------------
+# A manager publishes an exam to one employee at a time (rather than
+# to a whole position-branch). Each assignment carries a shuffle_seed
+# so two employees taking the same exam see questions and choices in
+# different orders, which makes it harder to copy each other.
+#
+# Business rule: only ONE open assignment per (employee, exam) pair.
+# A new one cannot be created until the previous one is COMPLETED or
+# CANCELLED. This is enforced at the API layer (not via a DB unique
+# constraint, since multiple COMPLETED rows must coexist for history).
+
+class ExamAssignment(models.Model):
+    class Status(models.TextChoices):
+        ASSIGNED  = 'ASSIGNED',  'Assigned'        # waiting for the employee
+        STARTED   = 'STARTED',   'In progress'     # employee opened it
+        COMPLETED = 'COMPLETED', 'Completed'       # session graded
+        CANCELLED = 'CANCELLED', 'Cancelled'       # manager withdrew before start
+
+    employee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='exam_assignments',
+    )
+    exam = models.ForeignKey(
+        ExamTemplate,
+        on_delete=models.CASCADE,
+        related_name='assignments',
+    )
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='exam_assignments_made',
+    )
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    due_date = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+
+    # Random per-assignment integer used to deterministically shuffle
+    # the question order and the choice order so each employee sees a
+    # different layout of the same questions.
+    shuffle_seed = models.IntegerField(
+        default=0,
+        help_text='Random integer used to derive per-assignment question + choice order.',
+    )
+
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.ASSIGNED,
+        db_index=True,
+    )
+
+    # Filled in when the employee starts the exam.
+    session = models.OneToOneField(
+        ExamSession,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assignment',
+    )
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-assigned_at']
+        indexes = [
+            models.Index(fields=['employee', 'status']),
+            models.Index(fields=['exam', 'status']),
+        ]
+
+    def __str__(self):
+        return (
+            f'ExamAssignment(emp={self.employee_id}, '
+            f'exam={self.exam_id}, status={self.status})'
+        )
+
+    @property
+    def is_open(self):
+        return self.status in (self.Status.ASSIGNED, self.Status.STARTED)

@@ -5,6 +5,12 @@ from training.manual_award_views import (
     ManualAwardApproveView,
     ManualAwardRejectView,
 )
+from training.exam_assignment_views import (
+    ExamAssignmentListCreateView,
+    ExamAssignmentDetailView,
+    MyExamAssignmentsView,
+    ExamAssignmentCancelView,
+)
 from training.views import (
     CompetencyListCreateView,
     CompetencyDetailView,
@@ -50,6 +56,12 @@ urlpatterns = [
     path('manual-awards/pending/', ManualAwardPendingListView.as_view(), name='manual-awards-pending'),
     path('manual-awards/<int:pk>/approve/', ManualAwardApproveView.as_view(), name='manual-awards-approve'),
     path('manual-awards/<int:pk>/reject/', ManualAwardRejectView.as_view(), name='manual-awards-reject'),
+
+    # Per-employee exam assignments
+    path('exam-assignments/', ExamAssignmentListCreateView.as_view(), name='exam-assignments'),
+    path('exam-assignments/mine/', MyExamAssignmentsView.as_view(), name='exam-assignments-mine'),
+    path('exam-assignments/<int:pk>/', ExamAssignmentDetailView.as_view(), name='exam-assignment-detail'),
+    path('exam-assignments/<int:pk>/cancel/', ExamAssignmentCancelView.as_view(), name='exam-assignment-cancel'),
     # Multi-file attachments per competency (gallery support)
     path('competencies/<int:pk>/attachments/', CompetencyAttachmentListCreateView.as_view(), name='competency-attachments'),
     path('attachments/<int:pk>/', CompetencyAttachmentDeleteView.as_view(), name='competency-attachment-delete'),
