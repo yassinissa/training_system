@@ -257,15 +257,20 @@ class ManualAwardApproveView(APIView):
 
         # Create the matching EmployeeCompetencyRecord so the score and
         # points count toward the employee's totals like a real exam pass.
+        # EmployeeCompetencyRecord has unique_together (employee, competency),
+        # so use update_or_create instead of create to handle the case where
+        # the employee already has a record for this competency.
         comp = award.competency
         points = getattr(comp, 'priority_points', 0) or 0
-        record = EmployeeCompetencyRecord.objects.create(
+        record, _ = EmployeeCompetencyRecord.objects.update_or_create(
             employee=award.employee,
             competency=comp,
-            status='PASSED',
-            score=award.score,
-            points_earned=points,
-            date_completed=timezone.now().date(),
+            defaults={
+                'status': 'PASSED',
+                'score': award.score,
+                'points_earned': points,
+                'date_completed': timezone.now().date(),
+            },
         )
 
         # Apply level override if the manager specified one.
