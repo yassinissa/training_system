@@ -7,6 +7,7 @@ import DataState from '../components/DataState.jsx';
 import { useAuth } from '../hooks/auth-context.jsx';
 import { useToast } from '../hooks/useToast.jsx';
 import EmployeeAttachments from '../components/EmployeeAttachments.jsx';
+import ManualAwardForm from '../components/ManualAwardForm.jsx';
 
 
 export default function ManagerDashboard() {
@@ -1173,6 +1174,13 @@ export default function ManagerDashboard() {
           {/* Internal profile attachments (signed score sheets, photos, IDs).
               Visible only to managers + admins, never to the employee. */}
           <EmployeeAttachments employeeId={assignEmployee.id} />
+
+          {/* Manual scoring (verbal assessment) - requires admin approval */}
+          <ManualAwardForm
+            employeeId={assignEmployee.id}
+            employeeName={assignEmployee.username}
+            competencies={competencies}
+          />
         </>
       )}
     </div>

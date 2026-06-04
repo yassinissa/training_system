@@ -5,6 +5,7 @@ import Tabs from '../components/Tabs.jsx'
 import CountUp from '../components/CountUp.jsx'
 import DataState from '../components/DataState.jsx'
 import { useToast } from '../hooks/useToast.jsx'
+import ManualAwardsAdminQueue from '../components/ManualAwardsAdminQueue.jsx'
 
 export default function AdminDashboard() {
   const navigate = useNavigate()
@@ -1157,6 +1158,7 @@ export default function AdminDashboard() {
     { key: 'positions', label: 'Positions', content: PositionsTab },
     { key: 'levels', label: 'Levels', content: LevelsTab },
     { key: 'promote', label: 'Promote', content: PromoteTab },
+    { key: 'manual-awards', label: 'Manual Awards', content: <ManualAwardsAdminQueue /> },
   ]
 
   return (
