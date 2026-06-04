@@ -583,3 +583,109 @@ class LevelThresholdSetting(models.Model):
                 cl4_min_points=0,
             )
         return obj
+
+
+# ---------------------------------------------------------
+# MANUAL COMPETENCY AWARD (verbal assessment, admin-approved)
+# ---------------------------------------------------------
+# A manager submits a verbal-assessment result for an employee: the
+# competency, the score, and (optionally) the level they should be at.
+# It sits PENDING until an admin reviews. On approval the system creates
+# a real EmployeeCompetencyRecord and, if a level was specified, writes
+# it to User.manual_level_override.
+#
+# Use case: staff who can't read or write are assessed verbally. The
+# manager prints the score, the employee signs it, the signed paper is
+# uploaded as an EmployeeAttachment for audit.
+
+class ManualCompetencyAward(models.Model):
+    class Status(models.TextChoices):
+        PENDING  = 'PENDING',  'Pending admin approval'
+        APPROVED = 'APPROVED', 'Approved'
+        REJECTED = 'REJECTED', 'Rejected'
+
+    employee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='manual_awards_received',
+    )
+    competency = models.ForeignKey(
+        Competency,
+        on_delete=models.CASCADE,
+        related_name='manual_awards',
+    )
+    score = models.FloatField(
+        help_text='Score the employee received on the verbal assessment.',
+    )
+    max_score = models.FloatField(
+        default=100,
+        help_text='Maximum possible score (defaults to 100).',
+    )
+    level = models.CharField(
+        max_length=3,
+        choices=CompetencyLevel.choices,
+        blank=True,
+        null=True,
+        help_text=(
+            'Optional. If set and the award is approved, this is written '
+            'to the employee as their competency level override.'
+        ),
+    )
+    notes = models.TextField(blank=True)
+
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='manual_awards_submitted',
+        help_text='The manager who submitted this award.',
+    )
+    requested_at = models.DateTimeField(auto_now_add=True)
+
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='manual_awards_reviewed',
+        help_text='The admin who approved or rejected.',
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True)
+
+    # Filled in on approval - links to the record created from this award.
+    resulting_record = models.OneToOneField(
+        EmployeeCompetencyRecord,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='manual_award_source',
+    )
+
+    class Meta:
+        ordering = ['-requested_at']
+        indexes = [
+            models.Index(fields=['status', 'requested_at']),
+            models.Index(fields=['employee', 'competency']),
+        ]
+
+    def __str__(self):
+        return (
+            f'ManualAward(emp={self.employee_id}, '
+            f'comp={self.competency_id}, status={self.status})'
+        )
+
+    @property
+    def percentage(self):
+        """Score as a percentage, or None if max_score is 0."""
+        try:
+            return (float(self.score) / float(self.max_score)) * 100.0
+        except Exception:
+            return None

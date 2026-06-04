@@ -93,6 +93,23 @@ class User(AbstractUser):
     # NOTE:
     # We do NOT store current competency level or total points as fields anymore.
     # They are derived from EmployeeCompetencyRecord to avoid manual input and duplication.
+    #
+    # The one exception is the override below. When an admin approves a
+    # ManualCompetencyAward that specifies a level (e.g. for employees who
+    # can't read and were verbally assessed), the approved level is written
+    # here and `get_competency_level()` returns it instead of the points-based
+    # value. Clearing this field re-enables the auto-computed level.
+    manual_level_override = models.CharField(
+        max_length=3,
+        choices=CompetencyLevel.choices,
+        null=True,
+        blank=True,
+        help_text=(
+            "If set, overrides the auto-computed competency level. "
+            "Used when a manager assigns a level via a verbal assessment "
+            "that an admin has approved."
+        ),
+    )
 
     def is_admin(self):
         return self.role == self.Roles.ADMIN
@@ -152,9 +169,12 @@ class User(AbstractUser):
 
     def get_competency_level(self) -> str:
         """
-        Returns CL0-CL4 from total points.
-        Uses per-position thresholds when set, otherwise global.
+        Returns CL0-CL4. An admin-approved manual override wins; otherwise
+        compute from total points using per-position or global thresholds.
         """
+        # Approved verbal-assessment override takes precedence over points.
+        if self.manual_level_override:
+            return self.manual_level_override
         total_points = self.get_total_points()
         t = self.get_competency_level_thresholds()
         cl1, cl2, cl3, cl4 = t['CL1'], t['CL2'], t['CL3'], t['CL4']

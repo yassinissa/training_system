@@ -1,4 +1,10 @@
 from django.urls import path, include
+from training.manual_award_views import (
+    ManualAwardListCreateView,
+    ManualAwardPendingListView,
+    ManualAwardApproveView,
+    ManualAwardRejectView,
+)
 from training.views import (
     CompetencyListCreateView,
     CompetencyDetailView,
@@ -38,6 +44,12 @@ urlpatterns = [
     # Competencies (list/create + retrieve/update/delete)
     path('competencies/', CompetencyListCreateView.as_view(), name='competency-list'),
     path('competencies/<int:pk>/', CompetencyDetailView.as_view(), name='competency-detail'),
+
+    # Manual competency awards (verbal assessments, admin-approved)
+    path('manual-awards/', ManualAwardListCreateView.as_view(), name='manual-awards'),
+    path('manual-awards/pending/', ManualAwardPendingListView.as_view(), name='manual-awards-pending'),
+    path('manual-awards/<int:pk>/approve/', ManualAwardApproveView.as_view(), name='manual-awards-approve'),
+    path('manual-awards/<int:pk>/reject/', ManualAwardRejectView.as_view(), name='manual-awards-reject'),
     # Multi-file attachments per competency (gallery support)
     path('competencies/<int:pk>/attachments/', CompetencyAttachmentListCreateView.as_view(), name='competency-attachments'),
     path('attachments/<int:pk>/', CompetencyAttachmentDeleteView.as_view(), name='competency-attachment-delete'),
