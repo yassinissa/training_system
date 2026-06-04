@@ -215,3 +215,51 @@ class Notification(models.Model):
 
     def __str__(self):
         return f'[{self.kind}] {self.user_id}: {self.title}'
+
+
+# ---------------------------------------------------------
+# EMPLOYEE PROFILE ATTACHMENTS
+# ---------------------------------------------------------
+# Files (images / PDFs / scans) uploaded onto an employee's profile by
+# managers and admins. Use case: paper trail for verbal assessments -
+# a manager prints the score, the employee signs it, the manager scans
+# / photographs it and uploads it here. Audit only - employees never
+# see these themselves.
+
+class EmployeeAttachment(models.Model):
+    """One file uploaded onto an employee's profile by a manager/admin."""
+
+    class Kind(models.TextChoices):
+        SIGNED_SCORE = 'SIGNED_SCORE', 'Signed score sheet'
+        PHOTO        = 'PHOTO',        'Photo'
+        ID           = 'ID',           'ID / document'
+        OTHER        = 'OTHER',        'Other'
+
+    employee = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.CASCADE,
+        related_name='attachments',
+        help_text='The employee this file belongs to.',
+    )
+    file = models.FileField(upload_to='employees/attachments/')
+    kind = models.CharField(
+        max_length=20,
+        choices=Kind.choices,
+        default=Kind.OTHER,
+    )
+    caption = models.CharField(max_length=255, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    uploaded_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='employee_attachments_uploaded',
+    )
+
+    class Meta:
+        ordering = ['-uploaded_at']
+        indexes = [models.Index(fields=['employee', 'kind'])]
+
+    def __str__(self):
+        return f'EmployeeAttachment(employee={self.employee_id}, kind={self.kind})'

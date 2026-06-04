@@ -1,7 +1,26 @@
 from rest_framework import serializers
-from accounts.models import User, Position, Notification
+from accounts.models import User, Position, Notification, EmployeeAttachment
 from branches.models import Branch
 from django.contrib.auth import authenticate
+
+
+# ---------------------------------------------------------
+# EMPLOYEE ATTACHMENT SERIALIZER
+# ---------------------------------------------------------
+
+class EmployeeAttachmentSerializer(serializers.ModelSerializer):
+    """One file on an employee's profile."""
+    uploaded_by_username = serializers.CharField(
+        source='uploaded_by.username', read_only=True,
+    )
+
+    class Meta:
+        model = EmployeeAttachment
+        fields = [
+            'id', 'employee', 'file', 'kind', 'caption',
+            'uploaded_at', 'uploaded_by', 'uploaded_by_username',
+        ]
+        read_only_fields = ['uploaded_at', 'uploaded_by', 'uploaded_by_username']
 
 
 # ---------------------------------------------------------

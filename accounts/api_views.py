@@ -40,6 +40,120 @@ class ProfilePictureRemoveAPIView(APIView):
 
 
 # ---------------------------------------------------------
+# EMPLOYEE PROFILE ATTACHMENTS API
+# ---------------------------------------------------------
+from django.shortcuts import get_object_or_404
+from .models import EmployeeAttachment, User as UserModel
+from .serializers import EmployeeAttachmentSerializer
+
+
+def _can_manage_employee(actor, employee):
+    """True if `actor` (the request.user) may upload to / view files on
+    `employee`'s profile. Admins can manage everyone; managers only
+    employees inside their own branches."""
+    if not actor or not actor.is_authenticated:
+        return False
+    role = getattr(actor, 'role', None)
+    if role == 'ADMIN' or getattr(actor, 'is_superuser', False):
+        return True
+    if role == 'MANAGER':
+        # Manager can manage employees in any of their branches
+        try:
+            managed_qs = actor.managed_branches_qs()
+            return (
+                employee.employee_branch_id is not None
+                and managed_qs.filter(id=employee.employee_branch_id).exists()
+            )
+        except Exception:
+            # Defensive: if the helper isn't on the actor, fall back to deny.
+            return False
+    return False
+
+
+def _detect_attachment_kind(uploaded_file):
+    """Cheap MIME / extension sniff so the UI can group by kind."""
+    ct = (getattr(uploaded_file, 'content_type', '') or '').lower()
+    name = (getattr(uploaded_file, 'name', '') or '').lower()
+    if ct.startswith('image/') or name.endswith((
+        '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.heic'
+    )):
+        return EmployeeAttachment.Kind.PHOTO
+    return EmployeeAttachment.Kind.OTHER
+
+
+class EmployeeAttachmentListCreateView(APIView):
+    """
+    GET  /api/accounts/employees/<employee_id>/attachments/ - list files.
+    POST /api/accounts/employees/<employee_id>/attachments/ - upload one
+                                                              or many.
+    POST accepts either a single `file` field or many `files` fields
+    in the same multipart request. Optional fields: `caption`, `kind`.
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get(self, request, employee_id):
+        employee = get_object_or_404(UserModel, pk=employee_id)
+        if not _can_manage_employee(request.user, employee):
+            return Response({'detail': 'Not allowed'}, status=status.HTTP_403_FORBIDDEN)
+        qs = employee.attachments.all()
+        return Response(EmployeeAttachmentSerializer(qs, many=True).data)
+
+    def post(self, request, employee_id):
+        employee = get_object_or_404(UserModel, pk=employee_id)
+        if not _can_manage_employee(request.user, employee):
+            return Response({'detail': 'Not allowed'}, status=status.HTTP_403_FORBIDDEN)
+
+        files = request.FILES.getlist('files') or request.FILES.getlist('file')
+        if not files:
+            return Response(
+                {'detail': "No file uploaded - use 'file' or 'files'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        caption = (request.data.get('caption') or '').strip()
+        explicit_kind = (request.data.get('kind') or '').strip().upper() or None
+
+        created = []
+        for f in files:
+            kind = explicit_kind or _detect_attachment_kind(f)
+            # Validate the kind against the choices; fall back to OTHER.
+            if kind not in dict(EmployeeAttachment.Kind.choices):
+                kind = EmployeeAttachment.Kind.OTHER
+            att = EmployeeAttachment.objects.create(
+                employee=employee,
+                file=f,
+                kind=kind,
+                caption=caption,
+                uploaded_by=request.user,
+            )
+            created.append(att)
+
+        return Response(
+            EmployeeAttachmentSerializer(created, many=True).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class EmployeeAttachmentDeleteView(APIView):
+    """DELETE /api/accounts/employee-attachments/<id>/ - remove one file."""
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        att = get_object_or_404(EmployeeAttachment, pk=pk)
+        if not _can_manage_employee(request.user, att.employee):
+            return Response({'detail': 'Not allowed'}, status=status.HTTP_403_FORBIDDEN)
+        # Delete the underlying file from storage too (R2 in prod).
+        if att.file:
+            try:
+                att.file.delete(save=False)
+            except Exception:
+                pass
+        att.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ---------------------------------------------------------
 # NOTIFICATIONS API
 # ---------------------------------------------------------
 from .models import Notification

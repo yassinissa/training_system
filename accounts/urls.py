@@ -6,6 +6,8 @@ from .api_views import (
     NotificationListAPIView,
     NotificationMarkReadAPIView,
     NotificationMarkAllReadAPIView,
+    EmployeeAttachmentListCreateView,
+    EmployeeAttachmentDeleteView,
 )
 from .views import EmployeeProfileView
 
@@ -14,6 +16,18 @@ urlpatterns = [
     path('me/profile-picture/', ProfilePictureUploadAPIView.as_view(), name='accounts-profile-picture-upload'),
     path('me/profile-picture/remove/', ProfilePictureRemoveAPIView.as_view(), name='accounts-profile-picture-remove'),
     path('employee/<int:employee_id>/', EmployeeProfileView.as_view(), name='employee-profile'),
+
+    # Employee profile attachments (manager/admin only)
+    path(
+        'employees/<int:employee_id>/attachments/',
+        EmployeeAttachmentListCreateView.as_view(),
+        name='employee-attachments',
+    ),
+    path(
+        'employee-attachments/<int:pk>/',
+        EmployeeAttachmentDeleteView.as_view(),
+        name='employee-attachment-delete',
+    ),
 
     # Notifications
     path('notifications/', NotificationListAPIView.as_view(), name='notifications-list'),
