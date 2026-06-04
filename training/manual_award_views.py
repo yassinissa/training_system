@@ -27,6 +27,7 @@ from training.models import (
     ManualCompetencyAward,
     Competency,
     EmployeeCompetencyRecord,
+    PositionCompetencyRequirement,
 )
 
 
@@ -261,9 +262,27 @@ class ManualAwardApproveView(APIView):
         # so use update_or_create instead of create to handle the case where
         # the employee already has a record for this competency.
         comp = award.competency
-        points = getattr(comp, 'priority_points', 0) or 0
+        emp = award.employee
+
+        # Resolve priority points the SAME way the regular exam grader does:
+        # 1) The PositionCompetencyRequirement for this employee's
+        #    position + branch wins (because the manager set those points
+        #    when they published the requirement).
+        # 2) Cross-training fallback: if no requirement matches, use the
+        #    competency's own default priority_points.
+        requirement = PositionCompetencyRequirement.objects.filter(
+            position=emp.position,
+            competency=comp,
+            branch=emp.employee_branch,
+        ).first()
+        points = (
+            requirement.priority_points
+            if requirement
+            else (getattr(comp, 'priority_points', 0) or 0)
+        )
+
         record, _ = EmployeeCompetencyRecord.objects.update_or_create(
-            employee=award.employee,
+            employee=emp,
             competency=comp,
             defaults={
                 'status': 'PASSED',
