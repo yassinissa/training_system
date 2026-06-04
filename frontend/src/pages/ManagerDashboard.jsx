@@ -8,6 +8,7 @@ import { useAuth } from '../hooks/auth-context.jsx';
 import { useToast } from '../hooks/useToast.jsx';
 import EmployeeAttachments from '../components/EmployeeAttachments.jsx';
 import ManualAwardForm from '../components/ManualAwardForm.jsx';
+import ExamAssignmentForm from '../components/ExamAssignmentForm.jsx';
 
 
 export default function ManagerDashboard() {
@@ -1183,6 +1184,13 @@ export default function ManagerDashboard() {
             employeeId={assignEmployee.id}
             employeeName={assignEmployee.username}
             competencies={competencies}
+          />
+
+          {/* Per-employee exam assignment (shuffled per assignee) */}
+          <ExamAssignmentForm
+            employeeId={assignEmployee.id}
+            employeeName={assignEmployee.username}
+            exams={exams}
           />
         </>
       )}
