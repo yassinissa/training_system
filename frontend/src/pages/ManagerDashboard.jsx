@@ -914,8 +914,13 @@ export default function ManagerDashboard() {
           {/* Grading Modal (rendered once, outside table) */}
           {gradingSession && (
             <Modal open={!!gradingSession} onClose={() => setGradingSession(null)}>
-              <div style={{ width: '100%', maxWidth: 600, color: '#0f1c34' }}>
-                <h3 style={{ margin: '0 0 12px', color: '#0f1c34' }}>
+              <div style={{ width: '100%', color: '#0f1c34' }}>
+                <h3 style={{
+                  margin: '0 0 12px',
+                  color: '#0f1c34',
+                  paddingRight: 36,  /* leave room for the Modal's X button */
+                  wordBreak: 'break-word',
+                }}>
                   Grade Exam: {gradingSession.exam?.title || gradingSession.id}
                 </h3>
                 {gradingLoading && <div>Loading...</div>}
@@ -928,28 +933,36 @@ export default function ManagerDashboard() {
                         background: '#f8fafd',
                         border: '1px solid #e3eafc',
                         borderRadius: 10,
-                        padding: 12,
+                        padding: 14,
                         color: '#0f1c34',
                       }}
                     >
-                      <div style={{ fontWeight: 700, marginBottom: 6, wordBreak: 'break-word' }}>
+                      <div style={{ fontWeight: 700, marginBottom: 8, wordBreak: 'break-word', fontSize: 15 }}>
                         Q{idx + 1}: {a.question?.text}
                       </div>
-                      <div style={{ fontSize: 14, marginBottom: 10, wordBreak: 'break-word' }}>
+                      <div style={{ fontSize: 14, marginBottom: 12, wordBreak: 'break-word' }}>
                         <b>Employee Answer:</b>{' '}
                         {a.text_answer || (a.selected_choices?.map(c => c.text).join(', ') || '—')}
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14 }}>
-                          Points:
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, flexWrap: 'wrap' }}>
+                          <span>Points:</span>
                           <input
                             type="number"
+                            inputMode="decimal"
                             min={0}
                             max={a.question?.max_points || 1}
                             step="any"
                             value={a.points_awarded}
                             onChange={e => setGradingAnswers(prev => prev.map(ans => ans.id === a.id ? { ...ans, points_awarded: e.target.value } : ans))}
-                            style={{ width: 70, padding: '6px 8px', border: '1px solid #c8d3e8', borderRadius: 6 }}
+                            style={{
+                              width: 96,
+                              minHeight: 40,
+                              padding: '8px 10px',
+                              border: '1px solid #c8d3e8',
+                              borderRadius: 8,
+                              fontSize: 16, /* prevents iOS auto-zoom on focus */
+                            }}
                           />
                           <span style={{ color: '#647187' }}>/ {a.question?.max_points}</span>
                         </label>
@@ -958,11 +971,18 @@ export default function ManagerDashboard() {
                           placeholder="Manager comment (optional)"
                           value={a.manager_comment || ''}
                           onChange={e => setGradingAnswers(prev => prev.map(ans => ans.id === a.id ? { ...ans, manager_comment: e.target.value } : ans))}
-                          style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', border: '1px solid #c8d3e8', borderRadius: 6 }}
+                          style={{
+                            width: '100%',
+                            boxSizing: 'border-box',
+                            padding: '10px 12px',
+                            border: '1px solid #c8d3e8',
+                            borderRadius: 8,
+                            fontSize: 16,
+                          }}
                         />
                         <button
                           className="btn"
-                          style={{ alignSelf: 'flex-end' }}
+                          style={{ alignSelf: 'flex-end', minHeight: 40, padding: '8px 16px' }}
                           onClick={() => submitAnswerGrade(a.id, a.points_awarded, a.manager_comment)}
                         >
                           Save
@@ -971,10 +991,34 @@ export default function ManagerDashboard() {
                     </div>
                   ))}
                 </div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                  <button className="btn" onClick={() => setGradingSession(null)}>Close</button>
+                {/* Sticky action bar - stays visible at the bottom of the modal
+                    even when scrolling through many answers, and even when the
+                    on-screen keyboard pushes the viewport up. */}
+                <div style={{
+                  position: 'sticky',
+                  bottom: -20,
+                  marginTop: 16,
+                  marginLeft: -20,
+                  marginRight: -20,
+                  padding: '12px 20px',
+                  background: '#fff',
+                  borderTop: '1px solid #e3eafc',
+                  display: 'flex',
+                  gap: 10,
+                  justifyContent: 'flex-end',
+                  flexWrap: 'wrap',
+                  boxShadow: '0 -8px 20px -10px rgba(0,0,0,0.08)',
+                }}>
+                  <button
+                    className="btn"
+                    style={{ minHeight: 40, padding: '8px 18px' }}
+                    onClick={() => setGradingSession(null)}
+                  >
+                    Close
+                  </button>
                   <button
                     className="btn primary"
+                    style={{ minHeight: 40, padding: '8px 18px' }}
                     disabled={gradingAnswers.some(a => a.points_awarded === '' || a.points_awarded === null || a.points_awarded === undefined)}
                     onClick={() => finalizeSessionGrade(gradingSession.id)}
                   >
