@@ -621,16 +621,13 @@ class ExamTemplateListView(generics.ListAPIView):
                 ).distinct()
             return qs
 
-        # Employees: only exams for their position/branch via requirements
-        from training.models import PositionCompetencyRequirement
-        competency_ids = list(PositionCompetencyRequirement.objects.filter(
-            position=user.position,
-            branch=user.employee_branch,
-        ).values_list("competency_id", flat=True))
-        logger.info(f"Employee allowed competency_ids: {competency_ids}")
-        result = qs.filter(competency_id__in=competency_ids)
-        logger.info(f"Returning queryset count: {result.count()}")
-        return result
+        # Employees no longer get exams automatically just because their
+        # position has a published requirement. Exams are a manager-owned
+        # library; the manager assigns them one-by-one per employee via
+        # ExamAssignment. Employees should fetch from /exam-assignments/mine/
+        # instead of this list.
+        logger.info("Employee role: returning empty exam list (use /exam-assignments/mine/).")
+        return qs.none()
 
 
 # ---------------------------------------------------------

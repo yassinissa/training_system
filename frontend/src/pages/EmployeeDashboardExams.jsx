@@ -2,30 +2,23 @@ import React from "react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/client";
-import { fetchUserExamSessions } from "../api/examSessionUtils";
 
 export default function EmployeeDashboardExams() {
-  const [exams, setExams] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [examSessionStatus, setExamSessionStatus] = useState({});
   const navigate = useNavigate();
 
   useEffect(() => {
     setLoading(true);
     setError("");
-    Promise.all([
-      api.get("/training/exams/list/"),
-      fetchUserExamSessions(),
-      // Manager-assigned exams (filtered to the logged-in user on the server)
-      api.get("/training/exam-assignments/mine/").catch(() => ({ data: [] })),
-    ])
-      .then(([examsRes, sessionMap, asgRes]) => {
-        setExams(examsRes.data || []);
-        setExamSessionStatus(sessionMap);
-        const list = Array.isArray(asgRes.data) ? asgRes.data : [];
-        // Show only OPEN assignments (ASSIGNED or STARTED).
+    // Employees only see exams a manager assigned to them personally.
+    // The old "Available Assessments" list (auto-published via the
+    // employee's position requirements) was removed - exams are now a
+    // manager-owned library and only reach an employee via assignment.
+    api.get("/training/exam-assignments/mine/")
+      .then((res) => {
+        const list = Array.isArray(res.data) ? res.data : [];
         setAssignments(list.filter(
           (a) => a.status === 'ASSIGNED' || a.status === 'STARTED'
         ));
@@ -36,15 +29,24 @@ export default function EmployeeDashboardExams() {
 
   return (
     <div className="card p-4">
-      {/* ---- Manager-assigned exams (priority block) ---- */}
+      <h2 style={{ fontWeight: 700, fontSize: '1.5rem', marginBottom: 8 }}>
+        My Assessments
+      </h2>
+      <div style={{ color: '#555', fontSize: 14, marginBottom: 14 }}>
+        Exams your manager has assigned to you. You can only take what's listed here.
+      </div>
+
+      {loading && <div style={{color: '#1976d2', fontSize: 18}}>Loading…</div>}
+      {error && <div style={{color: '#c62828', fontSize: 16}}>{error}</div>}
+      {!loading && !error && assignments.length === 0 && (
+        <div style={{color: '#888', fontSize: 16, fontStyle: 'italic'}}>
+          No assessments assigned yet. Your manager will publish exams to you here.
+        </div>
+      )}
+
+      {/* ---- Assigned exam cards ---- */}
       {!loading && assignments.length > 0 && (
-        <div style={{ marginBottom: 24 }}>
-          <h2 style={{ fontWeight: 700, fontSize: '1.5rem', marginBottom: 8 }}>
-            Assigned to you
-          </h2>
-          <div style={{ color: '#555', fontSize: 14, marginBottom: 14 }}>
-            Exams a manager assigned to you personally. These should be taken first.
-          </div>
+        <div style={{ marginBottom: 8 }}>
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
@@ -123,64 +125,6 @@ export default function EmployeeDashboardExams() {
           </div>
         </div>
       )}
-
-      <h2 style={{fontWeight:700, fontSize: "1.5rem", marginBottom: 18}}>Available Assessments</h2>
-      {loading && <div style={{color: '#1976d2', fontSize: 18}}>Loading…</div>}
-      {error && <div style={{color: '#c62828', fontSize: 16}}>{error}</div>}
-      {!loading && !error && exams.length === 0 && assignments.length === 0 && (
-        <div style={{color: '#888', fontSize: 16}}>No assessments available.</div>
-      )}
-      {!loading && !error && exams.length === 0 && assignments.length > 0 && (
-        <div style={{color: '#888', fontSize: 14, fontStyle: 'italic'}}>
-          Nothing else open right now — focus on the assigned exam above.
-        </div>
-      )}
-      <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 20}}>
-        {exams.map((exam) => {
-          const info = examSessionStatus[exam.id] || { status: "NONE", canStart: true };
-          const isRetake = info.status === "GRADED" && info.retakeAllowed && info.canStart;
-          const blocked = !info.canStart;
-          // Determine label
-          let label = "Start Assessment";
-          if (blocked) label = "Open Assessment";
-          else if (isRetake) label = "Retake Exam";
-          else if (info.status === "IN_PROGRESS") label = "Resume Assessment";
-          return (
-            <div key={exam.id} style={{background: '#fff', borderRadius: 14, boxShadow: '0 2px 10px rgba(0,0,0,0.07)', padding: 20, marginBottom: 10, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', wordBreak: 'break-word'}}>
-              <div style={{fontWeight: 600, fontSize: 18, color: '#1976d2', marginBottom: 6}}>{exam.title}</div>
-              <div style={{color: '#444', fontSize: 15, marginBottom: 8}}>{exam.description || 'No description'}</div>
-              <div style={{color: '#888', fontSize: 13, marginBottom: 8}}>Time Limit: {exam.time_limit_seconds ? (exam.time_limit_seconds/60)+" min" : 'N/A'}</div>
-              {isRetake && (
-                <div style={{color: '#16a34a', fontSize: 13, fontWeight: 600, marginBottom: 6}}>
-                  Retake unlocked by manager - your previous attempt remains in history.
-                </div>
-              )}
-              <button
-                style={{
-                  marginTop: 'auto',
-                  background: blocked ? '#e0e0e0' : (isRetake ? '#16a34a' : '#1976d2'),
-                  color: blocked ? '#888' : '#fff',
-                  border: 'none',
-                  borderRadius: 8,
-                  padding: '8px 18px',
-                  fontWeight: 600,
-                  cursor: blocked ? 'not-allowed' : 'pointer'
-                }}
-                onClick={() => {
-                  if (blocked) {
-                    window.alert('You have already submitted this assessment.');
-                  } else {
-                    navigate(`/assessment/${exam.id}`);
-                  }
-                }}
-                disabled={false}
-              >
-                {label}
-              </button>
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }
