@@ -914,7 +914,39 @@ export default function ManagerDashboard() {
           {/* Grading Modal (rendered once, outside table) */}
           {gradingSession && (
             <Modal open={!!gradingSession} onClose={() => setGradingSession(null)}>
-              <div style={{ width: '100%', color: '#0f1c34' }}>
+              <div className="grading-modal-body" style={{ width: '100%', color: '#0f1c34' }}>
+                {/* Force light theme on every input + button inside this modal,
+                    overriding the global dark theme that would otherwise make
+                    the inputs invisible on the white modal card. */}
+                <style>{`
+                  .grading-modal-body input,
+                  .grading-modal-body textarea {
+                    background: #fff !important;
+                    color: #0f1c34 !important;
+                    border: 1px solid #c8d3e8 !important;
+                  }
+                  .grading-modal-body input::placeholder,
+                  .grading-modal-body textarea::placeholder {
+                    color: #8b9ab8 !important;
+                  }
+                  .grading-modal-body .btn {
+                    background: #f1f3f8 !important;
+                    color: #0f1c34 !important;
+                    border: 1px solid #c8d3e8 !important;
+                  }
+                  .grading-modal-body .btn:hover {
+                    background: #e7eaf3 !important;
+                  }
+                  .grading-modal-body .btn.primary {
+                    background: linear-gradient(135deg,#5b8cff,#6aa0ff) !important;
+                    color: #fff !important;
+                    border: 1px solid #5b8cff !important;
+                  }
+                  .grading-modal-body .btn.primary:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                  }
+                `}</style>
                 <h3 style={{
                   margin: '0 0 12px',
                   color: '#0f1c34',
