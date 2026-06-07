@@ -19,6 +19,7 @@ import CompetencyPage from './pages/CompetencyPage.jsx'
 import AssessmentSessionPage from './pages/AssessmentSessionPage.jsx'
 import ExamReviewPage from './pages/ExamReviewPage.jsx'
 import NotFound from './pages/NotFound.jsx'
+import GradeSessionPage from './pages/GradeSessionPage.jsx'
 
 function AppContent() {
   const { user } = useAuth()
@@ -49,6 +50,7 @@ function AppContent() {
         <Route path="/manager/user/:id" element={<ProtectedRoute roles={["MANAGER", "ADMIN"]}><AdminUserActivity /></ProtectedRoute>} />
         <Route path="/manager/exams/:id/questions" element={<ProtectedRoute roles={["MANAGER"]}><ExamQuestions /></ProtectedRoute>} />
         <Route path="/manager/competencies/:id/edit" element={<ProtectedRoute roles={["MANAGER"]}><EditCompetencyPage /></ProtectedRoute>} />
+        <Route path="/manager/grade/:sessionId" element={<ProtectedRoute roles={["MANAGER","ADMIN"]}><GradeSessionPage /></ProtectedRoute>} />
         <Route path="/employee/exams/:id/questions" element={<ProtectedRoute roles={["EMPLOYEE"]}><EmployeeExamQuestions /></ProtectedRoute>} />
         <Route path="/assessment/:examId" element={<ProtectedRoute roles={["EMPLOYEE"]}><AssessmentSessionPage /></ProtectedRoute>} />
         <Route path="/competency/:id" element={<ProtectedRoute><CompetencyPage /></ProtectedRoute>} />

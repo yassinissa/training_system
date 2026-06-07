@@ -901,8 +901,9 @@ export default function ManagerDashboard() {
                       <button className="btn" onClick={() => navigate(`/manager/exams/${s.exam?.id || ''}/questions`)}>Open Exam</button>
                       {/* Always show Grade. Manual sessions need real grading;
                           auto-only sessions still need the manager to click
-                          Finalize so the session moves from SUBMITTED to GRADED. */}
-                      <button className="btn primary" onClick={() => openGradingModal(s.id)}>
+                          Finalize so the session moves from SUBMITTED to GRADED.
+                          Now goes to a dedicated page (was a popup modal). */}
+                      <button className="btn primary" onClick={() => navigate(`/manager/grade/${s.id}`)}>
                         {s.manual_needed ? 'Grade' : 'Finalize'}
                       </button>
                     </div>
