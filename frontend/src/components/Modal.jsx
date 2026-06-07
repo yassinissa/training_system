@@ -1,20 +1,26 @@
 import React, { useEffect, useRef } from 'react'
 
 /**
- * Centered modal with:
- *  - Locked body scroll while open (prevents the page behind from scrolling
- *    under your finger on iOS).
- *  - ESC key closes.
- *  - Backdrop click closes ONLY if the press started on the backdrop itself.
- *    A drag/scroll inside the card that releases on the backdrop won't close.
- *  - Full-screen on phones with a sticky close button so long forms remain
- *    usable when the keyboard is open.
+ * A predictable centered modal.
+ *
+ * The card is a vertical flex container that fills available height
+ * with `overflow: hidden`. Children can structure themselves as
+ * sticky header / scrollable body / sticky footer using flex.
+ *
+ * Behaviour:
+ *   - Locks body scroll while open.
+ *   - ESC closes.
+ *   - Tap/click ON THE BACKDROP closes; tap inside the card does not.
+ *     We detect that by checking `e.target === backdropRef.current`,
+ *     so a drag-scroll inside the card that releases on the backdrop
+ *     does not trigger close (no more "blinking").
+ *   - On phones (<=640px) the card goes truly full-screen so long
+ *     forms stay usable when the keyboard pushes the viewport up.
  */
 export default function Modal({ open, onClose, children }) {
-  const downOnBackdropRef = useRef(false)
   const backdropRef = useRef(null)
 
-  // ----- lock body scroll while open -----
+  // Lock background scroll while open.
   useEffect(() => {
     if (!open) return
     const original = document.body.style.overflow
@@ -22,34 +28,26 @@ export default function Modal({ open, onClose, children }) {
     return () => { document.body.style.overflow = original }
   }, [open])
 
-  // ----- ESC key closes -----
+  // ESC closes.
   useEffect(() => {
     if (!open) return
-    const onKey = (e) => {
-      if (e.key === 'Escape') onClose?.()
-    }
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
   if (!open) return null
 
-  // Backdrop close pattern: require mouseDown AND mouseUp to BOTH happen
-  // on the backdrop. Stops accidental closes when you drag-scroll inside
-  // and release outside, which was the source of the "blinking" bug.
-  const handleMouseDown = (e) => {
-    downOnBackdropRef.current = e.target === backdropRef.current
-  }
-  const handleMouseUp = (e) => {
-    if (downOnBackdropRef.current && e.target === backdropRef.current) {
-      onClose?.()
-    }
-    downOnBackdropRef.current = false
+  const handleBackdropClick = (e) => {
+    // Only close if the click landed on the backdrop itself,
+    // not on the card or any of its children.
+    if (e.target === backdropRef.current) onClose?.()
   }
 
   return (
     <div
       ref={backdropRef}
+      onClick={handleBackdropClick}
       style={{
         position: 'fixed',
         inset: 0,
@@ -59,73 +57,34 @@ export default function Modal({ open, onClose, children }) {
         alignItems: 'center',
         justifyContent: 'center',
         padding: 12,
-        overflow: 'hidden',
       }}
-      onMouseDown={handleMouseDown}
-      onMouseUp={handleMouseUp}
-      onTouchStart={handleMouseDown}
-      onTouchEnd={handleMouseUp}
     >
       <div
         data-modal-card
+        onClick={(e) => e.stopPropagation()}
         style={{
           background: '#fff',
           color: '#0f1c34',
-          borderRadius: 12,
-          padding: 20,
+          borderRadius: 16,
           width: '100%',
-          maxWidth: 680,
-          maxHeight: '92vh',
-          overflowY: 'auto',
-          WebkitOverflowScrolling: 'touch',
+          maxWidth: 720,
+          maxHeight: 'calc(100vh - 24px)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
           boxShadow: '0 24px 48px -12px rgba(0,0,0,0.45)',
-          position: 'relative',
         }}
-        onClick={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-        onMouseUp={(e) => e.stopPropagation()}
-        onTouchStart={(e) => e.stopPropagation()}
-        onTouchEnd={(e) => e.stopPropagation()}
       >
-        {/* X close button - always visible top-right */}
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          title="Close"
-          style={{
-            position: 'sticky',
-            top: 0,
-            float: 'right',
-            marginLeft: 8,
-            marginBottom: 4,
-            background: '#f1f3f8',
-            color: '#0f1c34',
-            border: 'none',
-            borderRadius: '50%',
-            width: 32,
-            height: 32,
-            fontSize: 18,
-            cursor: 'pointer',
-            lineHeight: 1,
-            zIndex: 2,
-          }}
-        >
-          ×
-        </button>
         {children}
       </div>
 
-      {/* Mobile sizing tweaks */}
+      {/* Full-screen on phones so the keyboard doesn't push content off. */}
       <style>{`
         @media (max-width: 640px) {
-          /* On phones we want the modal to take most of the screen so the
-             form is usable when the keyboard opens. */
           [data-modal-card] {
-            max-width: 100% !important;
-            max-height: calc(100vh - 24px) !important;
-            padding: 16px !important;
-            border-radius: 14px !important;
+            border-radius: 0 !important;
+            max-height: 100vh !important;
+            height: 100vh !important;
           }
         }
       `}</style>
