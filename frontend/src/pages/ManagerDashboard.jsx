@@ -1179,18 +1179,32 @@ export default function ManagerDashboard() {
               Visible only to managers + admins, never to the employee. */}
           <EmployeeAttachments employeeId={assignEmployee.id} />
 
-          {/* Manual scoring (verbal assessment) - requires admin approval */}
+          {/* Manual scoring (verbal assessment) - requires admin approval.
+              The competencies dropdown is filtered to the ones REQUIRED for
+              this employee's position+branch, so a manager can't accidentally
+              award something the role doesn't need. */}
           <ManualAwardForm
             employeeId={assignEmployee.id}
             employeeName={assignEmployee.username}
-            competencies={competencies}
+            competencies={lookupResult?.competencies || []}
           />
 
-          {/* Per-employee exam assignment (shuffled per assignee) */}
+          {/* Per-employee exam assignment (shuffled per assignee).
+              The exam dropdown only shows exams whose competency is required
+              for this employee, again to prevent assigning irrelevant exams. */}
           <ExamAssignmentForm
             employeeId={assignEmployee.id}
             employeeName={assignEmployee.username}
-            exams={exams}
+            exams={(exams || []).filter((ex) => {
+              const required = lookupResult?.competencies || [];
+              if (!required.length) return false;
+              const reqIds = new Set(required.map((c) => Number(c.id)));
+              // ex.competency can be either an object or just an id
+              const compId = typeof ex.competency === 'object'
+                ? ex.competency?.id
+                : ex.competency;
+              return compId != null && reqIds.has(Number(compId));
+            })}
           />
         </>
       )}
