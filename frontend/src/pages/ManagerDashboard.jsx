@@ -802,6 +802,29 @@ export default function ManagerDashboard() {
                   <td>
                     <button className="btn" onClick={() => navigate(`/manager/exams/${ex.id}/questions`)}>Manage</button>
                     <button className="btn" style={{marginLeft:8}} onClick={() => navigate(`/web/exams/exam/${ex.id}`)}>View</button>
+                    <button
+                      className="btn danger"
+                      style={{ marginLeft: 8 }}
+                      onClick={async () => {
+                        if (!window.confirm(
+                          `Delete the exam "${ex.title}" permanently?\n\n` +
+                          `This removes the exam and all its questions and choices.\n` +
+                          `The server will REFUSE to delete if the exam has any past ` +
+                          `sessions on record or any open assignments.`
+                        )) return;
+                        try {
+                          await api.delete(`/training/exams/${ex.id}/`);
+                          success('Exam deleted');
+                          loadAll();
+                        } catch (e) {
+                          const msg = toMessage(e?.response?.data, 'Failed to delete exam');
+                          setError(msg);
+                          toastError(msg);
+                        }
+                      }}
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}

@@ -1,13 +1,65 @@
 from rest_framework.generics import RetrieveAPIView
 from rest_framework import generics, permissions, status
+from rest_framework.response import Response as _DRFResponse
 from training.models import ExamTemplate
 from training.serializers import ExamTemplateSerializer
 
-# Place ExamTemplateDetailView after all imports so ExamTemplate is defined
-class ExamTemplateDetailView(RetrieveAPIView):
+
+# GET + DELETE on /api/training/exams/<pk>/
+# Anyone authenticated can GET (used to render exam pages).
+# DELETE is restricted to admins or the manager who created the exam,
+# and refuses to wipe an exam that already has any sessions or any
+# open assignments - that history must not be lost silently.
+class ExamTemplateDetailView(generics.RetrieveDestroyAPIView):
     queryset = ExamTemplate.objects.all()
     serializer_class = ExamTemplateSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def destroy(self, request, *args, **kwargs):
+        exam = self.get_object()
+        user = request.user
+        is_admin = getattr(user, 'is_admin', lambda: False)()
+        is_manager = getattr(user, 'is_manager', lambda: False)()
+
+        # Only admins or the manager who originally created the exam can delete.
+        if not (is_admin or (is_manager and exam.created_by_id == user.id)):
+            return _DRFResponse(
+                {'detail': "You can only delete exams you created."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Safety: refuse to nuke historical exam sessions or active
+        # assignments. The manager must clean those up first.
+        session_count = exam.sessions.count() if hasattr(exam, 'sessions') else 0
+        if session_count:
+            return _DRFResponse(
+                {
+                    'detail': (
+                        f"Can't delete - this exam has {session_count} session(s) on record. "
+                        f"Deactivate it instead, or contact an admin."
+                    ),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        try:
+            open_assignments = exam.assignments.exclude(
+                status__in=['COMPLETED', 'CANCELLED']
+            ).count()
+        except Exception:
+            open_assignments = 0
+        if open_assignments:
+            return _DRFResponse(
+                {
+                    'detail': (
+                        f"Can't delete - {open_assignments} open assignment(s) "
+                        f"reference this exam. Cancel them first."
+                    ),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # No sessions, no open assignments -> safe to drop.
+        return super().destroy(request, *args, **kwargs)
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
