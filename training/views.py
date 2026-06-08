@@ -1,6 +1,7 @@
 from rest_framework.generics import RetrieveAPIView
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response as _DRFResponse
+from rest_framework.views import APIView
 from training.models import ExamTemplate
 from training.serializers import ExamTemplateSerializer
 
