@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/auth-context.jsx'
 import NotificationBell from './NotificationBell.jsx'
 
 export default function NavBar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
 
   // Helper that closes the mobile menu and navigates in one step.
@@ -13,6 +14,19 @@ export default function NavBar() {
   const go = (to) => {
     setMenuOpen(false);
     navigate(to);
+  };
+
+  // Hide the Back button on login + on each role's main dashboard root,
+  // since there's nothing meaningful behind those pages. Show everywhere
+  // else (any sub-page, any nested route).
+  const path = location.pathname;
+  const isDashboardRoot =
+    path === '/' || path === '/admin' || path === '/manager' || path === '/login';
+  const showBack = Boolean(user) && !isDashboardRoot;
+
+  const goBack = () => {
+    setMenuOpen(false);
+    navigate(-1);
   };
 
   return (
@@ -40,6 +54,16 @@ export default function NavBar() {
 
         {/* The action buttons: row on desktop, slide-down panel on mobile */}
         <div className={`nav-actions ${menuOpen ? 'is-open' : ''}`}>
+          {showBack && (
+            <button
+              className="btn"
+              onClick={goBack}
+              aria-label="Go back to the previous page"
+              title="Go back"
+            >
+              ← Back
+            </button>
+          )}
           <button className="btn" onClick={() => go('/')}>Dashboard</button>
           {user?.role === 'ADMIN' && (
             <>
