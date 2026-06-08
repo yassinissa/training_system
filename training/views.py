@@ -28,38 +28,76 @@ class ExamTemplateDetailView(generics.RetrieveDestroyAPIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        # Safety: refuse to nuke historical exam sessions or active
-        # assignments. The manager must clean those up first.
-        session_count = exam.sessions.count() if hasattr(exam, 'sessions') else 0
-        if session_count:
-            return _DRFResponse(
-                {
-                    'detail': (
-                        f"Can't delete - this exam has {session_count} session(s) on record. "
-                        f"Deactivate it instead, or contact an admin."
-                    ),
-                },
-                status=status.HTTP_409_CONFLICT,
-            )
-        try:
-            open_assignments = exam.assignments.exclude(
-                status__in=['COMPLETED', 'CANCELLED']
-            ).count()
-        except Exception:
-            open_assignments = 0
-        if open_assignments:
-            return _DRFResponse(
-                {
-                    'detail': (
-                        f"Can't delete - {open_assignments} open assignment(s) "
-                        f"reference this exam. Cancel them first."
-                    ),
-                },
-                status=status.HTTP_409_CONFLICT,
-            )
+        # Admins can force-delete - they have authority to wipe historical
+        # data when an exam was a mistake. Managers are blocked when there
+        # are sessions or open assignments, so they have to either clean up
+        # first or escalate to an admin.
+        if not is_admin:
+            session_count = exam.sessions.count() if hasattr(exam, 'sessions') else 0
+            if session_count:
+                return _DRFResponse(
+                    {
+                        'detail': (
+                            f"Can't delete - this exam has {session_count} session(s) on record. "
+                            f"Deactivate it instead, or ask an admin to force-delete."
+                        ),
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            try:
+                open_assignments = exam.assignments.exclude(
+                    status__in=['COMPLETED', 'CANCELLED']
+                ).count()
+            except Exception:
+                open_assignments = 0
+            if open_assignments:
+                return _DRFResponse(
+                    {
+                        'detail': (
+                            f"Can't delete - {open_assignments} open assignment(s) "
+                            f"reference this exam. Cancel them first."
+                        ),
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
 
-        # No sessions, no open assignments -> safe to drop.
+        # For admins we skip the safety check entirely; for managers we
+        # already returned above if anything blocked. Drop the exam now
+        # (CASCADE clears questions/choices/sessions/assignments).
         return super().destroy(request, *args, **kwargs)
+
+
+# Activate / deactivate (soft hide) - everyone with admin or
+# manager-as-creator privileges can toggle the exam's is_active flag.
+# Used when you don't want to permanently delete but want it gone
+# from every list (employees, managers, assign dropdowns, etc.).
+
+class ExamTemplateSetActiveView(APIView):
+    """POST /api/training/exams/<pk>/set-active/   body: {active: bool}"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            exam = ExamTemplate.objects.get(pk=pk)
+        except ExamTemplate.DoesNotExist:
+            return _DRFResponse({'detail': 'Not found'}, status=404)
+        user = request.user
+        is_admin = getattr(user, 'is_admin', lambda: False)()
+        is_manager = getattr(user, 'is_manager', lambda: False)()
+        if not (is_admin or (is_manager and exam.created_by_id == user.id)):
+            return _DRFResponse(
+                {'detail': "You can only change exams you created."},
+                status=403,
+            )
+        active = request.data.get('active')
+        if isinstance(active, str):
+            active = active.lower() in ('1', 'true', 'yes')
+        exam.is_active = bool(active)
+        exam.save(update_fields=['is_active'])
+        return _DRFResponse(
+            ExamTemplateSerializer(exam).data,
+            status=200,
+        )
 
 from rest_framework.views import APIView
 from rest_framework.response import Response

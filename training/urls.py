@@ -23,6 +23,7 @@ from training.views import (
     ExamTemplateCreateView,
     ExamTemplateListView,
     ExamTemplateDetailView,
+    ExamTemplateSetActiveView,
     QuestionListCreateView,
     QuestionChoiceListCreateView,
     StartExamSessionView,
@@ -84,6 +85,7 @@ urlpatterns = [
     path("exams/", ExamTemplateCreateView.as_view(), name="exam-template-create"),
     path("exams/list/", ExamTemplateListView.as_view(), name="exam-template-list"),
     path("exams/<int:pk>/", ExamTemplateDetailView.as_view(), name="exam-template-detail"),
+    path("exams/<int:pk>/set-active/", ExamTemplateSetActiveView.as_view(), name="exam-template-set-active"),
 
     # ---------------------------------------------------------
     # QUESTIONS + CHOICES

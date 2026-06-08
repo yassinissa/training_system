@@ -794,7 +794,9 @@ export default function ManagerDashboard() {
           <table className="table">
             <thead><tr><th>Title</th><th>Competency</th><th>Active</th><th>Action</th></tr></thead>
             <tbody>
-              {(exams || []).map((ex) => (
+              {(exams || []).map((ex) => {
+                const isAdmin = user?.role === 'ADMIN';
+                return (
                 <tr key={ex.id}>
                   <td>{ex.title}</td>
                   <td>{typeof ex.competency === 'object' ? (ex.competency?.title ?? ex.competency?.id ?? '—') : (ex.competency ?? '—')}</td>
@@ -802,24 +804,64 @@ export default function ManagerDashboard() {
                   <td>
                     <button className="btn" onClick={() => navigate(`/manager/exams/${ex.id}/questions`)}>Manage</button>
                     <button className="btn" style={{marginLeft:8}} onClick={() => navigate(`/web/exams/exam/${ex.id}`)}>View</button>
+
+                    {/* Deactivate / Activate - soft hide. Preserves sessions.
+                        Anyone who can edit the exam (admin OR creator) can toggle. */}
+                    <button
+                      className="btn"
+                      style={{ marginLeft: 8 }}
+                      onClick={async () => {
+                        const action = ex.is_active ? 'Deactivate' : 'Activate';
+                        if (!window.confirm(
+                          `${action} the exam "${ex.title}"?\n\n` +
+                          (ex.is_active
+                            ? 'It will disappear from employee assessments, dropdowns, and lists, but all sessions and history stay intact.'
+                            : 'It will become visible again everywhere.')
+                        )) return;
+                        try {
+                          await api.post(`/training/exams/${ex.id}/set-active/`, { active: !ex.is_active });
+                          success(ex.is_active ? 'Exam deactivated' : 'Exam reactivated');
+                          loadAll();
+                        } catch (e) {
+                          const msg = toMessage(e?.response?.data, 'Failed to change status');
+                          setError(msg);
+                          toastError(msg);
+                        }
+                      }}
+                    >
+                      {ex.is_active ? 'Deactivate' : 'Activate'}
+                    </button>
+
+                    {/* Delete - permanent. For non-admins the server refuses
+                        if there are sessions. Admins bypass that check, so we
+                        show them an extra strong warning. */}
                     <button
                       className="btn danger"
                       style={{ marginLeft: 8 }}
                       onClick={async () => {
-                        if (!window.confirm(
-                          `Delete the exam "${ex.title}" permanently?\n\n` +
-                          `This removes the exam and all its questions and choices.\n` +
-                          `The server will REFUSE to delete if the exam has any past ` +
-                          `sessions on record or any open assignments.`
-                        )) return;
+                        const msg = isAdmin
+                          ? (
+                              `ADMIN FORCE DELETE: "${ex.title}".\n\n` +
+                              `This will permanently delete the exam AND every session, ` +
+                              `answer, and assignment that references it. There is NO undo.\n\n` +
+                              `Are you absolutely sure?`
+                            )
+                          : (
+                              `Delete the exam "${ex.title}" permanently?\n\n` +
+                              `This removes the exam and all its questions and choices.\n` +
+                              `The server will refuse if the exam has any past sessions ` +
+                              `on record or any open assignments.\n\n` +
+                              `Tip: use Deactivate instead if you just want it hidden.`
+                            );
+                        if (!window.confirm(msg)) return;
                         try {
                           await api.delete(`/training/exams/${ex.id}/`);
                           success('Exam deleted');
                           loadAll();
                         } catch (e) {
-                          const msg = toMessage(e?.response?.data, 'Failed to delete exam');
-                          setError(msg);
-                          toastError(msg);
+                          const m = toMessage(e?.response?.data, 'Failed to delete exam');
+                          setError(m);
+                          toastError(m);
                         }
                       }}
                     >
@@ -827,7 +869,8 @@ export default function ManagerDashboard() {
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </DataState>
